@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-monad-dark text-white font-sans overflow-x-hidden antialiased;
+  }
+}
+
+/* Custom Arcade & Cyberpunk Styling */
+.shadow-glow-purple {
+  box-shadow: 0 0 25px rgba(131, 84, 254, 0.45);
+}
+
+.shadow-glow-cyan {
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.45);
+}
+
+.shadow-glow-pink {
+  box-shadow: 0 0 25px rgba(255, 0, 122, 0.45);
+}
+
+.shadow-glow-yellow {
+  box-shadow: 0 0 25px rgba(234, 179, 8, 0.45);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0e091b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a1e4a;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8354fe;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
