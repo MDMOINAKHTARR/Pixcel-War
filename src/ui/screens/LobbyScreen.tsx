@@ -1,19 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../../store/gameStore';
+import { useWeb3 } from '../../web3/Web3Context';
 import { MAPS } from '../../game/maps/MapData';
 import { BotDifficulty } from '../../types/game';
 import { SoundEngine } from '../../game/systems/SoundEngine';
 import { PixelArtVehicles, VehicleSkinId } from '../../game/graphics/PixelArtVehicles';
-import { ArrowLeft, Play, Users, Cpu, Shield, Zap } from 'lucide-react';
+import { ArrowLeft, Play, Users, Coins, CheckCircle, RefreshCw, AlertCircle, ExternalLink } from 'lucide-react';
+import { MONAD_TESTNET } from '../../web3/monadChain';
 
 interface LobbyScreenProps {
   onBack: () => void;
   onLaunchGame: () => void;
+  onOpenMultiplayer?: () => void;
 }
 
-export const LobbyScreen: React.FC<LobbyScreenProps> = ({ onBack, onLaunchGame }) => {
+export const LobbyScreen: React.FC<LobbyScreenProps> = ({ onBack, onLaunchGame, onOpenMultiplayer }) => {
   const { garage, selectedMap, gameMode, botCount, setBotCount, botDifficulty, setBotDifficulty } = useGameStore();
+  const { account, monBalance, connectWallet, sendWagerBidTransaction } = useWeb3();
   const [countdown, setCountdown] = useState<number | null>(null);
+
+  // Pre-match Bidding / Wagering state
+  const [wagerBidAmount, setWagerBidAmount] = useState<string>('0.5');
+  const [isBidPlaced, setIsBidPlaced] = useState<boolean>(false);
+  const [bidTxPending, setBidTxPending] = useState<boolean>(false);
+  const [bidTxHash, setBidTxHash] = useState<string | null>(null);
+  const [bidError, setBidError] = useState<string | null>(null);
 
   const currentMap = MAPS[selectedMap] || MAPS['neon_city'];
 
@@ -25,6 +36,26 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ onBack, onLaunchGame }
     { name: 'Shadow Ghost', skin: 'dark_m' as VehicleSkinId, difficulty: botDifficulty },
     { name: 'Agro Titan', skin: 'harvester' as VehicleSkinId, difficulty: botDifficulty },
   ].slice(0, botCount);
+
+  const handlePlaceBid = async () => {
+    if (!account) {
+      await connectWallet();
+      return;
+    }
+
+    setBidTxPending(true);
+    setBidError(null);
+
+    const res = await sendWagerBidTransaction(wagerBidAmount);
+    setBidTxPending(false);
+
+    if (res.success) {
+      setIsBidPlaced(true);
+      if (res.txHash) setBidTxHash(res.txHash);
+    } else {
+      setBidError(res.error || 'Failed to complete transaction on Monad Testnet');
+    }
+  };
 
   const handleStartCountdown = () => {
     setCountdown(3);
@@ -84,7 +115,94 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ onBack, onLaunchGame }
           <p className="text-[10px] text-cyber-cyan mt-1 font-['Silkscreen',sans-serif]">{currentMap.name}</p>
         </div>
 
-        <div className="w-12"></div>
+        {onOpenMultiplayer && (
+          <button
+            onClick={onOpenMultiplayer}
+            className="px-3 py-2.5 rounded-xl bg-[#8354fe] hover:bg-[#9d6fff] text-white text-[8px] flex items-center gap-1.5 border border-[#a855f7] shadow"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">PVP ROOMS</span>
+          </button>
+        )}
+      </div>
+
+      {/* Pre-Match On-Chain Wagering & Bidding Banner */}
+      <div className="max-w-5xl mx-auto w-full bg-[#201838] border-2 border-[#8354fe] rounded-3xl p-4 md:p-5 shadow-[0_0_30px_rgba(131,84,254,0.3)] z-10 relative space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-[#8354fe]/30 rounded-xl text-yellow-300">
+              <Coins className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs text-purple-300">PRE-MATCH MONAD WAGER / BID</h3>
+              <span className="text-[8px] text-gray-400 font-mono">Win 100% of the escrow prize pool on victory!</span>
+            </div>
+          </div>
+          <span className="text-[9px] text-yellow-400 font-mono">Wallet Balance: {monBalance} MON</span>
+        </div>
+
+        {bidError && (
+          <div className="p-3 bg-red-500/20 border border-red-500 rounded-xl text-red-300 text-[8px] flex items-center gap-2 font-mono">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{bidError}</span>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex-1 flex items-center gap-2 w-full">
+            <span className="text-[8px] text-gray-300 font-sans">BID AMOUNT:</span>
+            <input
+              type="number"
+              step="0.1"
+              min="0.1"
+              max="50"
+              value={wagerBidAmount}
+              disabled={isBidPlaced || bidTxPending}
+              onChange={(e) => setWagerBidAmount(e.target.value)}
+              className="flex-1 bg-[#161124] border border-[#4c3a7a] focus:border-[#a855f7] rounded-xl px-3 py-2 text-white font-mono text-xs outline-none"
+            />
+            <span className="px-3 py-2 bg-[#8354fe]/25 border border-[#a855f7] rounded-xl text-[9px] text-purple-300 font-bold">
+              MON
+            </span>
+          </div>
+
+          <button
+            onClick={handlePlaceBid}
+            disabled={bidTxPending || isBidPlaced}
+            className={`w-full sm:w-auto px-6 py-2.5 rounded-xl text-[8px] font-sans transition-all flex items-center justify-center gap-2 ${
+              isBidPlaced
+                ? 'bg-green-500/20 text-green-300 border border-green-500'
+                : 'bg-[#eab308] hover:bg-[#ca8a04] text-black font-bold border border-yellow-300 shadow-[0_4px_0_#a16207]'
+            }`}
+          >
+            {bidTxPending ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> SIGNING ON MONAD...
+              </>
+            ) : isBidPlaced ? (
+              <>
+                <CheckCircle className="w-3.5 h-3.5 text-green-400" /> {wagerBidAmount} MON BID CONFIRMED ✓
+              </>
+            ) : (
+              <>
+                <Coins className="w-3.5 h-3.5" /> SEND {wagerBidAmount} MON BID
+              </>
+            )}
+          </button>
+        </div>
+
+        {bidTxHash && (
+          <div className="pt-1 flex items-center justify-end">
+            <a
+              href={`${MONAD_TESTNET.blockExplorers.default.url}/tx/${bidTxHash}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[8px] font-mono text-purple-300 hover:text-white flex items-center gap-1 underline"
+            >
+              View Transaction on MonadExplorer <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Main Roster Grid */}
@@ -98,7 +216,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ onBack, onLaunchGame }
             <LobbyVehiclePreview skinId={(garage.skinId as VehicleSkinId) || 'red'} />
           </div>
           <div className="text-sm text-white">{garage.pilotName}</div>
-          <div className="text-[9px] text-gray-300 font-mono">STATUS: READY TO DEPLOY</div>
+          <div className="text-[9px] text-gray-300 font-mono">
+            {isBidPlaced ? `⚡ ESCROW: ${wagerBidAmount} MON` : 'STATUS: READY TO DEPLOY'}
+          </div>
         </div>
 
         {/* Competitor AI Roster */}
@@ -150,13 +270,12 @@ const LobbyVehiclePreview: React.FC<{ skinId: VehicleSkinId }> = ({ skinId }) =>
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(canvas.width * 0.5, canvas.height * 0.5);
-    PixelArtVehicles.drawVehicle(ctx, skinId, 1.0);
+    PixelArtVehicles.drawVehicle(ctx, skinId, 1.3);
     ctx.restore();
   }, [skinId]);
 
-  return <canvas ref={canvasRef} width={56} height={80} className="pointer-events-none" />;
+  return <canvas ref={canvasRef} width={64} height={90} className="pointer-events-none" />;
 };

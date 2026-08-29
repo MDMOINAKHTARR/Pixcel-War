@@ -5,14 +5,14 @@ import { drawSafeRoundRect } from './PixelArtVehicles';
  * PixelCityRenderer
  * High-Density Pixel-Art City District Renderer matching the reference district art:
  * - Worn dark slate asphalt with painted white dashed lane dividers and intersection zebra crosswalks
- * - Curbed light concrete sidewalks bordering every city block
+ * - Curbed light concrete sidewalks bordering every city block (curb collision aligns with MapData)
  * - Central Symmetric Park with manicured green lawns, 6 round trees, 4 benches, and oval stone fountain
  * - Outdoor Cafe Patio with umbrella tables and wooden armchairs
  * - East Parking Lot with diagonal painted stall lines and parked vehicles
- * - Detailed building architectures: Modern office with AC units, striped awning shopfronts,
- *   red-brick apartments, sloped tile roofs, and convenience stores with billboard signs
+ * - Detailed building architectures with varied rooftops: Modern office with AC units & solar panels,
+ *   striped awning shopfronts, red-brick apartments, sloped tile roofs, glass highrises, and convenience stores with billboard signs
  * - Street furniture: Dual-headed street lamp posts with cast shadows, trash bins, fire hydrants,
- *   and pavement wear/crack patches.
+ *   and consistent pavement wear/crack patches.
  */
 export class PixelCityRenderer {
   public static renderCityTrack(ctx: CanvasRenderingContext2D, map: MapDefinition) {
@@ -22,7 +22,7 @@ export class PixelCityRenderer {
     ctx.fillStyle = '#23252d';
     ctx.fillRect(0, 0, map.width, map.height);
 
-    // 2. Weathered Asphalt Texture & Crack/Repair Patches
+    // 2. Weathered Asphalt Texture & Consistent Wear/Crack/Skid Patches across all corridors
     PixelCityRenderer.renderAsphaltWear(ctx, map.width, map.height);
 
     // 3. Painted Lane Markings & Intersection Zebra Crosswalks
@@ -40,7 +40,7 @@ export class PixelCityRenderer {
     // 7. East Parking Lot with Stalls & Parked Vehicles (Mid-Right Block)
     PixelCityRenderer.renderParkingLot(ctx, 2050, 800);
 
-    // 8. Custom Pixel-Art Buildings (Matched to Reference Architecture)
+    // 8. Custom Pixel-Art Buildings with Rooftop Variations
     PixelCityRenderer.renderReferenceBuildings(ctx);
 
     // 9. Street Furniture (Lamp Posts, Trash Bins, Benches)
@@ -50,37 +50,76 @@ export class PixelCityRenderer {
   }
 
   /**
-   * 1. Asphalt Wear, Pavement Cracks & Repair Patches
+   * 1. Asphalt Wear, Pavement Cracks & Consistent Repair Patches across roads
    */
   private static renderAsphaltWear(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.save();
+
+    // Darker Weathered Asphalt Patches & Tar Repairs
     ctx.fillStyle = '#1c1e25';
     const wearSpots = [
-      { x: 300, y: 280, w: 90, h: 40 },
-      { x: 850, y: 260, w: 120, h: 50 },
-      { x: 1600, y: 290, w: 140, h: 45 },
-      { x: 2350, y: 450, w: 80, h: 100 },
-      { x: 2500, y: 950, w: 90, h: 110 },
-      { x: 2350, y: 1550, w: 110, h: 50 },
-      { x: 1700, y: 1750, w: 130, h: 45 },
-      { x: 950, y: 1730, w: 100, h: 50 },
-      { x: 450, y: 1500, w: 80, h: 90 },
-      { x: 260, y: 900, w: 90, h: 80 },
+      // North Avenue Corridor (Y: 200)
+      { x: 300, y: 190, w: 110, h: 50 },
+      { x: 750, y: 210, w: 140, h: 45 },
+      { x: 1400, y: 180, w: 160, h: 55 },
+      { x: 2050, y: 215, w: 130, h: 45 },
+      { x: 2500, y: 195, w: 120, h: 50 },
+      // South Avenue Corridor (Y: 1820)
+      { x: 350, y: 1810, w: 130, h: 50 },
+      { x: 850, y: 1830, w: 150, h: 45 },
+      { x: 1400, y: 1810, w: 170, h: 55 },
+      { x: 1950, y: 1830, w: 140, h: 50 },
+      { x: 2450, y: 1815, w: 120, h: 45 },
+      // West Avenue Corridor (X: 110)
+      { x: 110, y: 550, w: 60, h: 120 },
+      { x: 105, y: 1050, w: 70, h: 140 },
+      { x: 115, y: 1550, w: 65, h: 110 },
+      // East Avenue Corridor (X: 2690)
+      { x: 2690, y: 550, w: 65, h: 120 },
+      { x: 2695, y: 1050, w: 70, h: 140 },
+      { x: 2685, y: 1550, w: 65, h: 110 },
+      // Vertical Center Corridors (X: 1080 & X: 1720)
+      { x: 1080, y: 510, w: 55, h: 80 },
+      { x: 1080, y: 1500, w: 60, h: 90 },
+      { x: 1720, y: 510, w: 55, h: 80 },
+      { x: 1720, y: 1500, w: 60, h: 90 },
     ];
 
     for (const spot of wearSpots) {
       ctx.beginPath();
-      ctx.ellipse(spot.x, spot.y, spot.w * 0.5, spot.h * 0.5, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(spot.x, spot.y, spot.w * 0.5, spot.h * 0.5, 0.15, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Small Asphalt Gravel Pits
+    // Faint Asphalt Crack Lines
+    ctx.strokeStyle = '#14151a';
+    ctx.lineWidth = 1.5;
+    const crackLines = [
+      { x1: 720, y1: 180, x2: 760, y2: 230 },
+      { x1: 2020, y1: 170, x2: 2070, y2: 220 },
+      { x1: 820, y1: 1800, x2: 860, y2: 1850 },
+      { x1: 1980, y1: 1790, x2: 2030, y2: 1840 },
+      { x1: 100, y1: 980, x2: 130, y2: 1030 },
+      { x1: 2670, y1: 980, x2: 2710, y2: 1030 },
+    ];
+    for (const cl of crackLines) {
+      ctx.beginPath();
+      ctx.moveTo(cl.x1, cl.y1);
+      ctx.lineTo((cl.x1 + cl.x2) * 0.5 + 4, (cl.y1 + cl.y2) * 0.5 - 3);
+      ctx.lineTo(cl.x2, cl.y2);
+      ctx.stroke();
+    }
+
+    // Subtle Road Gravel Texture Grain
     ctx.fillStyle = '#14151a';
-    for (let x = 150; x < w; x += 320) {
-      for (let y = 150; y < h; y += 320) {
-        ctx.fillRect(x + (y % 30), y + (x % 40), 14, 6);
-        ctx.fillRect(x + 20, y + 10, 8, 4);
+    for (let x = 80; x < w; x += 260) {
+      for (let y = 80; y < h; y += 260) {
+        ctx.fillRect(x + (y % 25), y + (x % 35), 10, 5);
+        ctx.fillRect(x + 35, y + 15, 6, 3);
       }
     }
+
+    ctx.restore();
   }
 
   /**
@@ -94,55 +133,57 @@ export class PixelCityRenderer {
     ctx.lineWidth = 4;
     ctx.setLineDash([22, 18]);
 
-    // North Main Avenue (X: 150 -> 2650, Y: 280)
+    // North Main Avenue (Y: 200, X: 110 -> 2690)
     ctx.beginPath();
-    ctx.moveTo(180, 280);
-    ctx.lineTo(2620, 280);
+    ctx.moveTo(110, 200);
+    ctx.lineTo(2690, 200);
     ctx.stroke();
 
-    // South Avenue (X: 180 -> 2620, Y: 1720)
+    // South Avenue (Y: 1820, X: 110 -> 2690)
     ctx.beginPath();
-    ctx.moveTo(180, 1720);
-    ctx.lineTo(2620, 1720);
+    ctx.moveTo(110, 1820);
+    ctx.lineTo(2690, 1820);
     ctx.stroke();
 
-    // West Avenue (Y: 280 -> 1720, X: 350)
+    // West Avenue (X: 110, Y: 200 -> 1820)
     ctx.beginPath();
-    ctx.moveTo(350, 320);
-    ctx.lineTo(350, 1680);
+    ctx.moveTo(110, 200);
+    ctx.lineTo(110, 1820);
     ctx.stroke();
 
-    // East Avenue (Y: 280 -> 1720, X: 2450)
+    // East Avenue (X: 2690, Y: 200 -> 1820)
     ctx.beginPath();
-    ctx.moveTo(2450, 320);
-    ctx.lineTo(2450, 1680);
+    ctx.moveTo(2690, 200);
+    ctx.lineTo(2690, 1820);
     ctx.stroke();
 
-    // Center Park Loop Parkway (X: 1080 & X: 1720, Y: 320 -> 1680)
+    // Center Vertical Thoroughfares (X: 1080 & X: 1720)
     ctx.beginPath();
-    ctx.moveTo(1080, 320);
-    ctx.lineTo(1080, 1680);
-    ctx.moveTo(1720, 320);
-    ctx.lineTo(1720, 1680);
+    ctx.moveTo(1080, 200);
+    ctx.lineTo(1080, 1820);
+    ctx.moveTo(1720, 200);
+    ctx.lineTo(1720, 1820);
     ctx.stroke();
 
     ctx.setLineDash([]);
 
-    // Intersection Zebra Crosswalks (Matching Reference Style)
+    // Intersection Zebra Crosswalks
     const crosswalks = [
       // North Avenue Crosswalks
-      { x: 1080, y: 280, vertical: true },
-      { x: 1720, y: 280, vertical: true },
-      { x: 2450, y: 280, vertical: true },
-      { x: 350, y: 280, vertical: true },
-      // Mid-West & Mid-East Crosswalks
-      { x: 1080, y: 1000, vertical: false },
-      { x: 1720, y: 1000, vertical: false },
+      { x: 1080, y: 200, vertical: true },
+      { x: 1720, y: 200, vertical: true },
+      { x: 2690, y: 200, vertical: true },
+      { x: 110, y: 200, vertical: true },
+      // Mid Thoroughfare Crosswalks
+      { x: 1080, y: 650, vertical: false },
+      { x: 1720, y: 650, vertical: false },
+      { x: 1080, y: 1330, vertical: false },
+      { x: 1720, y: 1330, vertical: false },
       // South Avenue Crosswalks
-      { x: 1080, y: 1720, vertical: true },
-      { x: 1720, y: 1720, vertical: true },
-      { x: 2450, y: 1720, vertical: true },
-      { x: 350, y: 1720, vertical: true },
+      { x: 1080, y: 1820, vertical: true },
+      { x: 1720, y: 1820, vertical: true },
+      { x: 2690, y: 1820, vertical: true },
+      { x: 110, y: 1820, vertical: true },
     ];
 
     for (const cw of crosswalks) {
@@ -170,7 +211,7 @@ export class PixelCityRenderer {
   }
 
   /**
-   * 3. Sidewalks & City Block Basements
+   * 3. Sidewalks & City Block Basements (Curbs align with MapData obstacle collision)
    */
   private static renderCityBlocksAndSidewalks(ctx: CanvasRenderingContext2D) {
     ctx.save();
@@ -188,16 +229,16 @@ export class PixelCityRenderer {
       // Mid-Right Block (Parking Lot + Supermarket + Highrise)
       { x: 1820, y: 700, w: 760, h: 600 },
 
-      // Bottom-Left Block (Parkette + Apartments)
+      // Bottom-Left Block (Parkette + Modern Office)
       { x: 220, y: 1380, w: 760, h: 240 },
-      // Bottom-Mid Block (Pocket Park + Office)
+      // Bottom-Mid Block (Pocket Park + Slate Office)
       { x: 1180, y: 1380, w: 440, h: 240 },
       // Bottom-Right Block (Commercial Shops)
       { x: 1820, y: 1380, w: 760, h: 240 },
     ];
 
     for (const b of cityBlocks) {
-      // Concrete Sidewalk Border (Curbed Light Grey)
+      // Concrete Sidewalk Border (Curbed Light Grey - Outer collision edge)
       ctx.fillStyle = '#9ca3af'; // Curb bevel
       drawSafeRoundRect(ctx, b.x - 14, b.y - 14, b.w + 28, b.h + 28, 8);
       ctx.fill();
@@ -232,7 +273,7 @@ export class PixelCityRenderer {
   private static renderCentralPark(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
     ctx.save();
 
-    // Sidewalk Curbed Base
+    // Sidewalk Curbed Base (Outer wall matches MapData obstacle)
     ctx.fillStyle = '#9ca3af';
     drawSafeRoundRect(ctx, x - 14, y - 14, w + 28, h + 28, 10);
     ctx.fill();
@@ -332,6 +373,10 @@ export class PixelCityRenderer {
     ctx.fillStyle = '#d6d3d1';
     ctx.fillRect(x - 80, y - 80, 160, 160);
 
+    // Patio Overhang Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.fillRect(x - 80, y + 74, 160, 10);
+
     // 2 Dining Table Sets
     const tables = [
       { x: x - 40, y: y - 20 },
@@ -339,6 +384,12 @@ export class PixelCityRenderer {
     ];
 
     for (const t of tables) {
+      // Umbrella Drop Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(t.x + 4, t.y + 6, 18, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+
       // 4 Wooden Armchairs around table
       ctx.fillStyle = '#78350f'; // Dark wood
       ctx.fillRect(t.x - 22, t.y - 7, 10, 14); // Left chair
@@ -440,13 +491,13 @@ export class PixelCityRenderer {
   }
 
   /**
-   * 7. Custom Pixel-Art Buildings (Matched to Reference Architecture)
+   * 7. Custom Pixel-Art Buildings with Rooftop Variations
    */
   private static renderReferenceBuildings(ctx: CanvasRenderingContext2D) {
     ctx.save();
 
-    // Building 1: Modern Grey Concrete Office (Top-Left)
-    PixelCityRenderer.renderModernOfficeBuilding(ctx, 320, 440, 240, 140);
+    // Building 1: Modern Grey Concrete Office (Top-Left, Variant A: AC Units)
+    PixelCityRenderer.renderModernOfficeBuilding(ctx, 320, 440, 240, 140, 'ac_units');
 
     // Building 2: Retro Shop with Striped Canvas Awning (Top-Mid-Left)
     PixelCityRenderer.renderStripedAwningShop(ctx, 640, 440, 240, 140);
@@ -466,19 +517,26 @@ export class PixelCityRenderer {
     // Building 7: Supermarket with Large Rooftop Billboard Sign (Mid-Right Lower)
     PixelCityRenderer.renderBillboardSupermarket(ctx, 1900, 1080, 240, 140);
 
-    // Building 8: Modern Apartment Block (Bottom-Left)
-    PixelCityRenderer.renderModernOfficeBuilding(ctx, 320, 1420, 240, 140);
+    // Building 8: Modern Apartment Block (Bottom-Left, Variant B: Solar Panels + Access Hatch)
+    PixelCityRenderer.renderModernOfficeBuilding(ctx, 320, 1420, 240, 140, 'solar_panels');
 
-    // Building 9: Slate Commercial Building (Bottom-Mid)
-    PixelCityRenderer.renderModernOfficeBuilding(ctx, 1220, 1420, 240, 140);
+    // Building 9: Slate Commercial Building (Bottom-Mid, Variant C: Heli-pad & Vent Tower)
+    PixelCityRenderer.renderModernOfficeBuilding(ctx, 1220, 1420, 240, 140, 'helipad');
 
     ctx.restore();
   }
 
   /**
-   * Reference Architecture: Modern Office Building with Roof AC Units & Windows
+   * Reference Architecture: Modern Office Building with Rooftop Variations
    */
-  private static renderModernOfficeBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  private static renderModernOfficeBuilding(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    variant: 'ac_units' | 'solar_panels' | 'helipad' = 'ac_units'
+  ) {
     ctx.save();
     // Drop Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
@@ -497,14 +555,51 @@ export class PixelCityRenderer {
     ctx.lineWidth = 2;
     ctx.strokeRect(x + 4, y + 4, w - 8, h - 8);
 
-    // Roof AC Condenser Units & Vents
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(x + 20, y + 20, 32, 24);
-    ctx.fillRect(x + 70, y + 20, 24, 20);
+    // Rooftop Variations for Visual Variety across repeated building footprint
+    if (variant === 'ac_units') {
+      // Dual AC Condenser Units & Vents
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(x + 20, y + 20, 32, 24);
+      ctx.fillRect(x + 70, y + 20, 24, 20);
 
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(x + 24, y + 24, 24, 4);
-    ctx.fillRect(x + 24, y + 32, 24, 4);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(x + 24, y + 24, 24, 4);
+      ctx.fillRect(x + 24, y + 32, 24, 4);
+    } else if (variant === 'solar_panels') {
+      // 4 Photovoltaic Solar Panels
+      ctx.fillStyle = '#1e3a8a';
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 1;
+      for (let px = x + 16; px <= x + 88; px += 26) {
+        ctx.fillRect(px, y + 16, 22, 28);
+        ctx.strokeRect(px, y + 16, 22, 28);
+      }
+      // Roof Access Hatch
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(x + w - 40, y + 18, 20, 20);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(x + w - 38, y + 20, 16, 16);
+    } else if (variant === 'helipad') {
+      // Circular Landing Ring
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x + 60, y + 30, 22, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // "H" Marking
+      ctx.fillStyle = '#facc15';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('H', x + 60, y + 30);
+
+      // Central Cooling Fan Tower
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(x + 130, y + 16, 36, 28);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(x + 134, y + 20, 28, 20);
+    }
 
     // Grid Windows (Front Facade)
     ctx.fillStyle = '#1e293b';
@@ -521,7 +616,7 @@ export class PixelCityRenderer {
   }
 
   /**
-   * Reference Architecture: Shop with Striped Canvas Awning & Signboard
+   * Reference Architecture: Shop with Striped Canvas Awning, Signboard & Deep Overhang Shadow
    */
   private static renderStripedAwningShop(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
     ctx.save();
@@ -535,12 +630,23 @@ export class PixelCityRenderer {
     ctx.fillStyle = '#fde68a';
     ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
 
+    // Rooftop Skylight Window
+    ctx.fillStyle = '#0284c7';
+    ctx.fillRect(x + 30, y + 16, 40, 24);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 30, y + 16, 40, 24);
+
     // Orange & White Striped Canvas Awning along Front
     const awnY = y + h - 32;
     for (let ax = x + 10; ax < x + w - 10; ax += 18) {
       ctx.fillStyle = (Math.floor(ax / 18) % 2 === 0) ? '#ea580c' : '#f8fafc';
       ctx.fillRect(ax, awnY, 18, 26);
     }
+
+    // Deep Ambient Shadow Under Awning for Rich Depth
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(x + 10, awnY + 24, w - 20, 8);
 
     // Glass Display Storefront under Awning
     ctx.fillStyle = '#0284c7';
@@ -561,9 +667,14 @@ export class PixelCityRenderer {
     ctx.fillStyle = '#991b1b';
     ctx.fillRect(x, y, w, h);
 
-    // Sloped Dark Roof
+    // Sloped Dark Roof with Ridge Cap
     ctx.fillStyle = '#450a0a';
     ctx.fillRect(x + 4, y + 4, w - 8, 36);
+
+    // Chimney Vents & Roof Access Hatch
+    ctx.fillStyle = '#7f1d1d';
+    ctx.fillRect(x + 30, y + 8, 14, 16);
+    ctx.fillRect(x + w - 44, y + 8, 14, 16);
 
     // Brick Pattern Lines
     ctx.fillStyle = '#7f1d1d';
@@ -602,11 +713,17 @@ export class PixelCityRenderer {
     ctx.fillStyle = '#fed7aa';
     ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
 
-    // Horizontal Tile Grooves
+    // Horizontal Tile Grooves with Rich Shading
     ctx.fillStyle = '#b45309';
     for (let ty = y + 10; ty < y + h - 8; ty += 12) {
       ctx.fillRect(x + 4, ty, w - 8, 2);
     }
+
+    // Rooftop Dormer Window
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(x + w * 0.5 - 18, y + 14, 36, 24);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(x + w * 0.5 - 14, y + 18, 28, 16);
 
     ctx.restore();
   }
@@ -628,6 +745,11 @@ export class PixelCityRenderer {
     // Coffee Shop Neon Signboard
     ctx.fillStyle = '#db2777';
     ctx.fillRect(x + 20, y + 16, w - 40, 22);
+
+    // Cast Shadow under Signboard
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.fillRect(x + 20, y + 38, w - 40, 6);
+
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 9px "Press Start 2P", sans-serif';
     ctx.textAlign = 'center';
@@ -647,17 +769,33 @@ export class PixelCityRenderer {
     ctx.fillStyle = '#334155';
     ctx.fillRect(x, y, w, h);
 
+    // Rooftop Antenna Mast with Beacon
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.5, y);
+    ctx.lineTo(x + w * 0.5, y - 18);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(x + w * 0.5, y - 18, 3, 0, Math.PI * 2);
+    ctx.fill();
+
     // Reflective Tinted Glass Panels
     ctx.fillStyle = '#0ea5e9';
     for (let gy = y + 12; gy < y + h - 12; gy += 24) {
       ctx.fillRect(x + 8, gy, w - 16, 16);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(x + 10, gy + 2, w - 20, 3);
+      ctx.fillStyle = '#0ea5e9';
     }
 
     ctx.restore();
   }
 
   /**
-   * Reference Architecture: Supermarket with Large Rooftop Billboard Sign
+   * Reference Architecture: Supermarket with Large Rooftop Billboard Sign & Overhang Depth
    */
   private static renderBillboardSupermarket(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
     ctx.save();
@@ -671,6 +809,9 @@ export class PixelCityRenderer {
     ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
 
     // Large Rooftop Billboard Signboard with Japanese / Arcade Artwork
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(x + 22, y - 20, w - 40, 36);
+
     ctx.fillStyle = '#1e1b4b';
     ctx.fillRect(x + 20, y - 24, w - 40, 36);
     ctx.strokeStyle = '#facc15';
@@ -692,20 +833,20 @@ export class PixelCityRenderer {
   private static renderStreetFurniture(ctx: CanvasRenderingContext2D) {
     ctx.save();
 
-    // Dual-Head Street Lamp Posts at Major Block Corners
+    // Dual-Head Street Lamp Posts at Major Block Corners (Sitting safely on sidewalks)
     const lampPosts = [
-      { x: 200, y: 260 },
-      { x: 1000, y: 260 },
-      { x: 1800, y: 260 },
-      { x: 2600, y: 260 },
-      { x: 200, y: 1740 },
-      { x: 1000, y: 1740 },
-      { x: 1800, y: 1740 },
-      { x: 2600, y: 1740 },
-      { x: 1160, y: 700 },
-      { x: 1640, y: 700 },
-      { x: 1160, y: 1300 },
-      { x: 1640, y: 1300 },
+      { x: 206, y: 386 },
+      { x: 994, y: 386 },
+      { x: 1806, y: 386 },
+      { x: 2594, y: 386 },
+      { x: 206, y: 1634 },
+      { x: 994, y: 1634 },
+      { x: 1806, y: 1634 },
+      { x: 2594, y: 1634 },
+      { x: 1166, y: 706 },
+      { x: 1634, y: 706 },
+      { x: 1166, y: 1294 },
+      { x: 1634, y: 1294 },
     ];
 
     for (const lp of lampPosts) {

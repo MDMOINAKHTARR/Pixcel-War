@@ -1,15 +1,18 @@
 import { PlayerKart } from './entities/PlayerKart';
 import { BotKart } from './entities/BotKart';
+import { RemoteKart } from './entities/RemoteKart';
 import { Kart, KartInput } from './entities/Kart';
 import { Projectile } from './entities/Projectile';
 import { Pickup } from './entities/Pickup';
 import { Hazard } from './entities/Hazard';
 import { ParticleEngine } from './systems/ParticleEngine';
 import { SoundEngine } from './systems/SoundEngine';
+import { NetworkManager } from './systems/NetworkManager';
 import { MAPS } from './maps/MapData';
 import { Collision } from './physics/Collision';
 import { Vector2 } from './physics/Vector2';
 import { PixelCityRenderer } from './graphics/PixelCityRenderer';
+import { SpawnValidator } from './physics/SpawnValidator';
 import { getPositionWeightedWeapon } from './config/weapons';
 import {
   MapDefinition,
@@ -31,6 +34,7 @@ export interface GameEngineOptions {
   playerName?: string;
   playerColors?: { body?: string; accent?: string; underglow?: string; skinId?: any };
   matchDuration?: number;
+  isMultiplayer?: boolean;
   onScoreUpdate?: (scores: MatchScore[]) => void;
   onCombatEvent?: (event: CombatFeedEvent) => void;
   onMatchEnd?: (winner: MatchScore, allScores: MatchScore[]) => void;
@@ -45,6 +49,7 @@ export class GameEngine {
   public map: MapDefinition;
   public player: PlayerKart;
   public bots: BotKart[] = [];
+  public remotePlayers: Map<string, RemoteKart> = new Map();
   public projectiles: Projectile[] = [];
   public pickups: Pickup[] = [];
   public hazards: Hazard[] = [];
@@ -62,6 +67,7 @@ export class GameEngine {
   private isPaused: boolean = false;
   private lastTime: number = 0;
   private animFrameId: number | null = null;
+  private netSyncTimer: number = 0;
 
   public matchTimer: number = 90;
   public isMatchOver: boolean = false;
@@ -93,8 +99,15 @@ export class GameEngine {
       options.playerColors
     );
 
-    // Spawn Bots
-    this.initBots();
+    // Spawn Bots ONLY in single player mode (options.isMultiplayer === false/undefined and options.botCount > 0)
+    if (!options.isMultiplayer && (options.botCount ?? 4) > 0) {
+      this.initBots();
+    }
+
+    // Set up real-time networking listeners if in online multiplayer mode
+    if (options.isMultiplayer) {
+      this.initMultiplayerSync();
+    }
 
     // Spawn Pickups & Hazards
     this.initMapEntities();
@@ -111,6 +124,35 @@ export class GameEngine {
     });
     this.canvas.addEventListener('keydown', () => {
       this.soundEngine.resume();
+    });
+  }
+
+  private initMultiplayerSync() {
+    const net = NetworkManager.getInstance();
+    net.setCallbacks({
+      onRemoteKartUpdate: (data) => {
+        if (data.playerId === net.localPlayerId) return;
+
+        let remote = this.remotePlayers.get(data.playerId);
+        if (!remote) {
+          const spawnIndex = (this.remotePlayers.size + 1) % this.map.playerSpawns.length;
+          const spawn = this.map.playerSpawns[spawnIndex] || { x: 600, y: 600, rotation: 0 };
+          remote = new RemoteKart(
+            data.playerId,
+            `Racer_${data.playerId.slice(0, 4)}`,
+            'balanced',
+            new Vector2(spawn.x, spawn.y),
+            spawn.rotation,
+            { skinId: 'surf' } as any
+          );
+          this.remotePlayers.set(data.playerId, remote);
+        }
+
+        remote.applyNetworkState(data);
+      },
+      onPlayerDisconnected: (playerId) => {
+        this.remotePlayers.delete(playerId);
+      },
     });
   }
 
@@ -139,7 +181,8 @@ export class GameEngine {
       { name: 'Classic Fox', class: 'drift', skin: 'roadster' },
     ];
 
-    const count = Math.min(this.options.botCount || 4, this.map.playerSpawns.length - 1);
+    const targetBotCount = typeof this.options.botCount === 'number' ? this.options.botCount : 4;
+    const count = Math.min(targetBotCount, this.map.playerSpawns.length - 1);
 
     for (let i = 0; i < count; i++) {
       const spawn = this.map.playerSpawns[i + 1] || { x: 600 + i * 200, y: 600, rotation: 0 };
@@ -159,12 +202,13 @@ export class GameEngine {
   }
 
   private initMapEntities() {
-    // Pickups (Mystery Crates, Nitros, Health, Shields, Coins)
-    for (const p of this.map.pickupSpawns) {
+    // Pickups (Mystery Crates, Nitros, Health, Shields, Coins) - Validated against map collision
+    const validSpawns = SpawnValidator.sanitizePickupSpawns(this.map);
+    for (const p of validSpawns) {
       this.pickups.push(new Pickup(p.type, new Vector2(p.x, p.y)));
     }
 
-    // Boost Pads & Hazards
+    // Boost Pads / Hazards
     for (const h of this.map.hazards) {
       this.hazards.push(new Hazard(h));
     }
@@ -174,17 +218,14 @@ export class GameEngine {
     if (this.isRunning) return;
     this.isRunning = true;
     this.lastTime = performance.now();
-    this.soundEngine.resume();
     this.loop(this.lastTime);
   }
 
   public stop() {
     this.isRunning = false;
-    if (this.animFrameId !== null) {
+    if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = null;
     }
-    this.player.destroy();
     this.soundEngine.stopEngineSound();
     window.removeEventListener('resize', this.onResize);
   }
@@ -240,7 +281,8 @@ export class GameEngine {
       this.screenShake = Math.max(0, this.screenShake - dt * 25);
     }
 
-    const allKarts: Kart[] = [this.player, ...this.bots];
+    const remotesArray = Array.from(this.remotePlayers.values());
+    const allKarts: Kart[] = [this.player, ...this.bots, ...remotesArray];
 
     // 2. Update Pickups & Hazards
     for (const p of this.pickups) {
@@ -254,6 +296,25 @@ export class GameEngine {
     const playerInput = this.player.getInput();
     this.player.update(dt, playerInput, this.particleEngine, this.soundEngine);
     this.player.checkWaypointProgress(this.map.waypoints);
+
+    // Broadcast local player transform across network in multiplayer mode (30Hz tick)
+    if (this.options.isMultiplayer) {
+      this.netSyncTimer += dt;
+      if (this.netSyncTimer >= 0.033) {
+        this.netSyncTimer = 0;
+        NetworkManager.getInstance().sendTransform({
+          x: this.player.position.x,
+          y: this.player.position.y,
+          angle: this.player.angle,
+          speed: this.player.speed,
+          steer: playerInput.steer,
+          drift: this.player.isDrifting,
+          lap: this.player.currentLap,
+          waypoint: this.player.currentWaypointIndex,
+          finishTime: this.player.finishTime || undefined,
+        });
+      }
+    }
 
     // Player Weapon Firing
     if (playerInput.fire) {
@@ -285,6 +346,11 @@ export class GameEngine {
       }
     }
 
+    // 4.5. Update Remote Human Players
+    for (const remote of remotesArray) {
+      remote.updateRemote(dt, this.particleEngine, this.soundEngine);
+    }
+
     // 5. Update Projectiles
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
@@ -297,11 +363,10 @@ export class GameEngine {
 
       // Check Projectile vs Obstacle Collisions
       for (const obs of this.map.obstacles) {
-        const resolution = Collision.resolveCircleBox(proj.position, proj.radius, obs.x, obs.y, obs.width, obs.height);
-        if (resolution.collided) {
+        if (Collision.pointInBox(proj.position, obs.x, obs.y, obs.width, obs.height)) {
           proj.isDead = true;
-          this.particleEngine.emitExplosion(proj.position, 15);
-          this.soundEngine.playHit();
+          this.particleEngine.emitExplosion(proj.position, 12, '#ff007f');
+          this.soundEngine.playExplosion();
           break;
         }
       }
@@ -313,68 +378,72 @@ export class GameEngine {
 
       // Check Projectile vs Kart Collisions
       for (const kart of allKarts) {
-        if (kart.isDead) continue;
-        if (proj.ownerId === kart.id && !proj.isMine && proj.distanceTraveled < 40) continue;
-        if (proj.isMine && !proj.mineArmed) continue;
+        if (kart.isDead || kart.id === proj.ownerId) continue;
 
         if (Collision.circleCircle(proj.position, proj.radius, kart.position, kart.radius)) {
           proj.isDead = true;
+          const killed = kart.takeDamage(proj.damage, proj.ownerId);
 
-          const attacker = allKarts.find((k) => k.id === proj.ownerId);
-          const wasFatal = kart.takeDamage(proj.def.damage, attacker);
-
-          // Status effects
           if (proj.type === 'cryo') {
-            kart.applyStatus('freeze', 2.0);
-            this.particleEngine.emitIceShatter(kart.position);
-          } else if (proj.type === 'emp') {
-            kart.applyStatus('emp', 2.5);
+            kart.applyFreeze(2.5);
+            this.soundEngine.playFreeze();
           }
 
-          // FX
-          this.particleEngine.emitExplosion(proj.position, 25);
+          this.particleEngine.emitExplosion(proj.position, 20, '#00f0ff');
           this.soundEngine.playExplosion();
 
-          if (kart.isPlayer || proj.ownerId === this.player.id) {
-            this.screenShake = 12;
+          if (kart.isPlayer) {
+            this.screenShake = 15;
           }
 
-          // Record Combat Feed Event
-          if (this.options.onCombatEvent) {
-            this.options.onCombatEvent({
-              id: Math.random().toString(36).substring(2, 9),
-              killerName: proj.ownerName,
-              victimName: kart.name,
-              weapon: proj.type,
-              timestamp: Date.now(),
-            });
+          // Combat event logging & score awards
+          const attacker = allKarts.find((k) => k.id === proj.ownerId);
+          if (attacker) {
+            attacker.damageDealt += proj.damage;
+            attacker.score += proj.damage;
+
+            if (killed) {
+              attacker.kills += 1;
+              attacker.score += 100;
+
+              const combatEvent: CombatFeedEvent = {
+                id: `kill_${Date.now()}_${Math.random()}`,
+                attackerId: attacker.id,
+                attackerName: attacker.name,
+                victimId: kart.id,
+                victimName: kart.name,
+                weapon: proj.type,
+                timestamp: Date.now(),
+              };
+
+              if (this.options.onCombatEvent) {
+                this.options.onCombatEvent(combatEvent);
+              }
+            }
           }
 
           break;
         }
       }
-
-      if (proj.isDead) {
-        this.projectiles.splice(i, 1);
-      }
     }
 
     // 6. Kart vs Pickup Collisions
-    for (const kart of allKarts) {
-      if (kart.isDead) continue;
+    for (const pickup of this.pickups) {
+      if (!pickup.isActive) continue;
 
-      for (const pickup of this.pickups) {
-        if (!pickup.isActive) continue;
+      for (const kart of allKarts) {
+        if (kart.isDead) continue;
 
         if (Collision.circleCircle(kart.position, kart.radius, pickup.position, pickup.radius)) {
-          pickup.isActive = false;
-          pickup.respawnTimer = 0;
+          pickup.collect();
 
           if (pickup.type === 'mystery_box') {
-            const chosenWeapon = getPositionWeightedWeapon(kart.racePosition, allKarts.length);
-            kart.giveWeapon(chosenWeapon);
-            this.particleEngine.emitShockwave(pickup.position, 40);
-          } else if (pickup.type === 'nitro') {
+            const currentPosition = kart.racePosition || 1;
+            const totalRacers = allKarts.length;
+            const rolledWeapon = getPositionWeightedWeapon(currentPosition, totalRacers);
+            kart.giveWeapon(rolledWeapon);
+            this.particleEngine.emitSparks(pickup.position, 12);
+          } else if (pickup.type === 'nitro' || pickup.type === 'nitro_tank') {
             kart.applyBoost(2.2, 1.8);
             this.particleEngine.emitBoostFlames(kart.position, kart.angle);
           } else if (pickup.type === 'repair_kit') {
@@ -446,43 +515,44 @@ export class GameEngine {
           }
         }
       }
-
-      // Clamp to arena
-      kart.position.x = Math.max(kart.radius, Math.min(this.map.width - kart.radius, kart.position.x));
-      kart.position.y = Math.max(kart.radius, Math.min(this.map.height - kart.radius, kart.position.y));
     }
 
     // 9. Update Particles
     this.particleEngine.update(dt);
 
-    // 10. Dynamic Camera with Screen Shake
-    const shakeOffsetX = (Math.random() - 0.5) * this.screenShake;
-    const shakeOffsetY = (Math.random() - 0.5) * this.screenShake;
-    const targetCamX = this.player.position.x + Math.cos(this.player.angle) * this.player.speed * 0.25 + shakeOffsetX;
-    const targetCamY = this.player.position.y + Math.sin(this.player.angle) * this.player.speed * 0.25 + shakeOffsetY;
-    this.cameraPos.x += (targetCamX - this.cameraPos.x) * dt * 5.5;
-    this.cameraPos.y += (targetCamY - this.cameraPos.y) * dt * 5.5;
+    // 10. Update Dynamic Camera Tracking
+    const lookAhead = this.player.velocity.clone().multiplyScalar(0.35);
+    const targetCam = this.player.position.clone().add(lookAhead);
+    this.cameraPos.lerp(targetCam, 0.08);
 
-    // 11. Position Tracking & Scoring Update
+    if (this.screenShake > 0) {
+      this.cameraPos.x += (Math.random() - 0.5) * this.screenShake;
+      this.cameraPos.y += (Math.random() - 0.5) * this.screenShake;
+    }
+
+    // 11. Calculate Live Racing Positions & Leaderboard
     this.scoreUpdateTimer += dt;
     if (this.scoreUpdateTimer >= 0.2) {
       this.scoreUpdateTimer = 0;
 
-      if (isBattleMode) {
-        allKarts.sort((a, b) => b.score - a.score || b.kills - a.kills);
-      } else {
-        const wp = this.map.waypoints;
-        allKarts.sort((a, b) => {
-          const aTargetWp = wp[a.currentWaypointIndex % wp.length];
-          const bTargetWp = wp[b.currentWaypointIndex % wp.length];
-          const aDist = a.position.distanceTo(new Vector2(aTargetWp.x, aTargetWp.y));
-          const bDist = b.position.distanceTo(new Vector2(bTargetWp.x, bTargetWp.y));
-          const aScore = a.currentLap * 100000 + a.currentWaypointIndex * 1000 - aDist;
-          const bScore = b.currentLap * 100000 + b.currentWaypointIndex * 1000 - bDist;
-          return bScore - aScore;
-        });
-      }
+      // Sort racers by progress (lap -> waypoint index -> distance to next waypoint)
+      allKarts.sort((a, b) => {
+        if (a.currentLap !== b.currentLap) {
+          return b.currentLap - a.currentLap;
+        }
+        if (a.currentWaypointIndex !== b.currentWaypointIndex) {
+          return b.currentWaypointIndex - a.currentWaypointIndex;
+        }
+        const nextWp = this.map.waypoints[a.currentWaypointIndex % this.map.waypoints.length];
+        if (nextWp) {
+          const distA = a.position.distanceTo(new Vector2(nextWp.x, nextWp.y));
+          const distB = b.position.distanceTo(new Vector2(nextWp.x, nextWp.y));
+          return distA - distB;
+        }
+        return 0;
+      });
 
+      // Assign numeric ranks 1..N
       allKarts.forEach((k, idx) => {
         k.racePosition = idx + 1;
       });
@@ -517,7 +587,8 @@ export class GameEngine {
     this.isMatchOver = true;
     this.soundEngine.stopEngineSound();
 
-    const allKarts = [this.player, ...this.bots];
+    const remotesArray = Array.from(this.remotePlayers.values());
+    const allKarts = [this.player, ...this.bots, ...remotesArray];
     if (this.options.gameMode === 'battle') {
       allKarts.sort((a, b) => b.score - a.score || b.kills - a.kills);
     } else {
@@ -585,28 +656,36 @@ export class GameEngine {
       proj.render(ctx);
     }
 
-    // 8. Karts
+    // 8. Remote Human Karts
+    for (const remote of this.remotePlayers.values()) {
+      remote.render(ctx);
+    }
+
+    // 8.1. Bots (if single player)
     for (const bot of this.bots) {
       bot.render(ctx);
     }
+
+    // 8.2. Local Player
     this.player.render(ctx);
 
-    // 8.5. Pre-Firing Lock-On Targeting Reticle Cue (Proof of Concept 2)
+    // 8.5. Pre-Firing Lock-On Targeting Reticle Cue
     if (!this.player.isDead && (this.player.currentWeapon === 'cryo' || this.player.currentWeapon === 'blaster')) {
       let closestEnemy: Kart | null = null;
       let minEnemyDist = 650;
-      for (const bot of this.bots) {
-        if (bot.isDead) continue;
-        const dist = this.player.position.distanceTo(bot.position);
+      const potentialTargets = [...this.bots, ...Array.from(this.remotePlayers.values())];
+      for (const enemy of potentialTargets) {
+        if (enemy.isDead) continue;
+        const dist = this.player.position.distanceTo(enemy.position);
         if (dist < minEnemyDist) {
-          const toBot = bot.position.clone().subtract(this.player.position);
-          const botAngle = Math.atan2(toBot.y, toBot.x);
-          let angleDiff = botAngle - this.player.angle;
+          const toEnemy = enemy.position.clone().subtract(this.player.position);
+          const enemyAngle = Math.atan2(toEnemy.y, toEnemy.x);
+          let angleDiff = enemyAngle - this.player.angle;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
           if (Math.abs(angleDiff) < 0.6) {
             minEnemyDist = dist;
-            closestEnemy = bot;
+            closestEnemy = enemy;
           }
         }
       }
@@ -676,340 +755,57 @@ export class GameEngine {
       // 1. Cast Ambient Occlusion Drop Shadow for 3D Height
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-      ctx.shadowBlur = 18;
-      ctx.shadowOffsetX = 10;
-      ctx.shadowOffsetY = 14;
-      ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      ctx.shadowBlur = 10;
+      ctx.fillRect(obs.x - obs.width * 0.5 + 4, obs.y - obs.height * 0.5 + 6, obs.width, obs.height);
       ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
 
-      if (this.map.theme === 'volcano') {
-        // 3D Obsidian Magma Crag
-        ctx.fillStyle = '#0c0a09';
-        ctx.fillRect(obs.x - 6, obs.y - 6, obs.width + 12, obs.height + 12);
+      // 2. Base Extrusion Wall (3D Bevel)
+      ctx.fillStyle = this.darkenHex(obs.color, 0.5);
+      ctx.fillRect(obs.x - obs.width * 0.5, obs.y - obs.height * 0.5 + 4, obs.width, obs.height);
 
-        const cragGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.width, obs.y + obs.height);
-        cragGrad.addColorStop(0, '#450a0a');
-        cragGrad.addColorStop(0.5, '#1c1917');
-        cragGrad.addColorStop(1, '#0c0a09');
-        ctx.fillStyle = cragGrad;
-        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      // 3. Top Face
+      ctx.fillStyle = obs.color;
+      ctx.fillRect(obs.x - obs.width * 0.5, obs.y - obs.height * 0.5, obs.width, obs.height);
 
-        // Glowing Magma Fissure
-        ctx.strokeStyle = '#f97316';
-        ctx.lineWidth = 3;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#ef4444';
-        ctx.beginPath();
-        ctx.moveTo(obs.x + 20, obs.y + 20);
-        ctx.lineTo(obs.x + obs.width * 0.5, obs.y + obs.height * 0.5);
-        ctx.lineTo(obs.x + obs.width - 20, obs.y + obs.height - 20);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-      } else {
-        // 3D Elevated Terracotta Plaza Building (matching Pixel Wheels screenshot 5)
-        const wallGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x, obs.y + obs.height);
-        wallGrad.addColorStop(0, '#94a3b8');
-        wallGrad.addColorStop(1, '#475569');
-        ctx.fillStyle = wallGrad;
-        ctx.fillRect(obs.x - 6, obs.y - 6, obs.width + 12, obs.height + 12);
-
-        // Clay Terracotta Roof Surface
-        const roofGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.width, obs.y);
-        roofGrad.addColorStop(0, '#b91c1c');
-        roofGrad.addColorStop(0.3, '#dc2626');
-        roofGrad.addColorStop(0.7, '#b91c1c');
-        roofGrad.addColorStop(1, '#7f1d1d');
-        ctx.fillStyle = obs.color || roofGrad;
-        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-
-        // Roof Tile Grooves
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-        for (let ty = obs.y + 10; ty < obs.y + obs.height; ty += 14) {
-          ctx.fillRect(obs.x, ty, obs.width, 2.5);
-        }
-
-        // 3D Bevel Edge
-        ctx.strokeStyle = '#fca5a5';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
-      }
+      // 4. Highlight Border Edge
+      ctx.strokeStyle = this.lightenHex(obs.color, 0.3);
+      ctx.lineWidth = 2;
+      ctx.strokeRect(obs.x - obs.width * 0.5, obs.y - obs.height * 0.5, obs.width, obs.height);
 
       ctx.restore();
     }
   }
 
   private renderTrackMarkingsAndScenery(ctx: CanvasRenderingContext2D) {
+    if (!this.map.waypoints || this.map.waypoints.length === 0) return;
+
     ctx.save();
+    ctx.strokeStyle = this.map.trackColor;
+    ctx.lineWidth = 140;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    this.map.waypoints.forEach((wp, idx) => {
+      if (idx === 0) ctx.moveTo(wp.x, wp.y);
+      else ctx.lineTo(wp.x, wp.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
 
-    // 1. 3D Alternating Red-and-White Corner Curbs / Rumble Strips
-    if (this.map.waypoints && this.map.waypoints.length > 2) {
-      const wp = this.map.waypoints;
-      for (let i = 0; i < wp.length; i++) {
-        const p1 = wp[i];
-        const p2 = wp[(i + 1) % wp.length];
-        const segDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-        const count = Math.floor(segDist / 40);
-        const dx = (p2.x - p1.x) / count;
-        const dy = (p2.y - p1.y) / count;
-        const normX = -dy / Math.hypot(dx, dy);
-        const normY = dx / Math.hypot(dx, dy);
-
-        // Render Outer 3D Curbs
-        for (let j = 0; j < count; j++) {
-          const cx = p1.x + dx * j + normX * 90;
-          const cy = p1.y + dy * j + normY * 90;
-          ctx.fillStyle = j % 2 === 0 ? '#ef4444' : '#f8fafc';
-          ctx.fillRect(cx - 6, cy - 6, 12, 12);
-        }
-      }
-    }
-
-    // 2. Center Dashed Road Lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-    ctx.lineWidth = 3.5;
-    ctx.setLineDash([26, 22]);
-
-    if (this.map.waypoints && this.map.waypoints.length > 2) {
-      ctx.beginPath();
-      const wp = this.map.waypoints;
-      ctx.moveTo(wp[0].x, wp[0].y);
-      for (let i = 1; i < wp.length; i++) {
-        ctx.lineTo(wp[i].x, wp[i].y);
-      }
-      ctx.closePath();
-      ctx.stroke();
-    }
+    // Inner Curbs & Center Track Dashes
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([20, 20]);
+    ctx.stroke();
     ctx.setLineDash([]);
-
-    // 3. Painted 3D Road Turn Arrows
-    for (let i = 0; i < this.map.waypoints.length; i++) {
-      const p1 = this.map.waypoints[i];
-      const p2 = this.map.waypoints[(i + 1) % this.map.waypoints.length];
-      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-
-      ctx.save();
-      ctx.translate(p1.x, p1.y);
-      ctx.rotate(angle);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.lineWidth = 2;
-
-      ctx.beginPath();
-      ctx.moveTo(16, 0);
-      ctx.lineTo(0, -12);
-      ctx.lineTo(0, -5);
-      ctx.lineTo(-16, -5);
-      ctx.lineTo(-16, 5);
-      ctx.lineTo(0, 5);
-      ctx.lineTo(0, 12);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.restore();
-    }
-
-    // 3.5. PROOF OF CONCEPT 3: Blocky Town Grand Plaza 3D Fountain & Grandstand Crowds
-    if (this.map.id === 'neon_city' || this.map.theme === 'neon') {
-      const time = Date.now() * 0.003;
-
-      // 3D Animated Central Fountain Plaza Island
-      ctx.save();
-      const fX = 1400;
-      const fY = 1000;
-
-      // Fountain Stone Rim (3D Gradient)
-      const stoneGrad = ctx.createRadialGradient(fX, fY, 10, fX, fY, 80);
-      stoneGrad.addColorStop(0, '#64748b');
-      stoneGrad.addColorStop(0.7, '#334155');
-      stoneGrad.addColorStop(1, '#0f172a');
-      ctx.fillStyle = stoneGrad;
-      ctx.beginPath();
-      ctx.arc(fX, fY, 80, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Shimmering Blue Water Basin
-      const waterGrad = ctx.createRadialGradient(fX, fY, 5, fX, fY, 68);
-      waterGrad.addColorStop(0, '#38bdf8');
-      waterGrad.addColorStop(0.6, '#0284c7');
-      waterGrad.addColorStop(1, '#0369a1');
-      ctx.fillStyle = waterGrad;
-      ctx.beginPath();
-      ctx.arc(fX, fY, 68, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Water Ripple Waves
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 2;
-      for (let r = 16; r < 60; r += 16) {
-        const ripple = (r + (time * 25) % 16);
-        ctx.beginPath();
-        ctx.arc(fX, fY, ripple, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Center Spouting Fountain Nozzle
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = '#00f0ff';
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(fX, fY, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      ctx.restore();
-
-      // 3D Grandstand Barrier Cheering Spectator Crowds along Main Straight
-      ctx.save();
-      for (let cx = 700; cx <= 2100; cx += 50) {
-        const bounce = Math.sin(time * 3 + cx * 0.1) * 3;
-        // Crowd Body
-        ctx.fillStyle = (cx % 3 === 0) ? '#ef4444' : (cx % 3 === 1) ? '#3b82f6' : '#eab308';
-        ctx.beginPath();
-        ctx.arc(cx, 160 + bounce, 6, 0, Math.PI * 2);
-        ctx.fill();
-        // Cheering Arms / Waving Flags
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, 158 + bounce);
-        ctx.lineTo(cx + ((cx % 2 === 0) ? 6 : -6), 148 + bounce);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // 3D Start/Finish Arch Gantry with Working Traffic Countdown Lights
-      const gX = 1400;
-      const gY = 260;
-      ctx.save();
-      // Gantry Steel Truss
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(gX - 120, gY - 60, 240, 16);
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(gX - 120, gY - 60, 240, 16);
-
-      // Traffic Signals (Red, Yellow, Green LED Modules)
-      const sigTime = Math.floor(Date.now() / 600) % 3;
-      // Red Light
-      ctx.fillStyle = sigTime === 0 ? '#ef4444' : '#450a0a';
-      ctx.shadowColor = '#ef4444';
-      ctx.shadowBlur = sigTime === 0 ? 12 : 0;
-      ctx.beginPath();
-      ctx.arc(gX - 30, gY - 52, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Yellow Light
-      ctx.fillStyle = sigTime === 1 ? '#eab308' : '#422006';
-      ctx.shadowColor = '#eab308';
-      ctx.shadowBlur = sigTime === 1 ? 12 : 0;
-      ctx.beginPath();
-      ctx.arc(gX, gY - 52, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Green Light
-      ctx.fillStyle = sigTime === 2 ? '#22c55e' : '#052e16';
-      ctx.shadowColor = '#22c55e';
-      ctx.shadowBlur = sigTime === 2 ? 12 : 0;
-      ctx.beginPath();
-      ctx.arc(gX + 30, gY - 52, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      ctx.restore();
-    }
-
-    // 4. Volcanic Canyon Lava River
-    if (this.map.theme === 'volcano' || this.map.id === 'volcano_canyon') {
-      const time = Date.now() * 0.003;
-      ctx.strokeStyle = '#f97316';
-      ctx.lineWidth = 4;
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = '#ef4444';
-
-      ctx.beginPath();
-      for (let x = 100; x < this.map.width; x += 180) {
-        const wave = Math.sin(time + x * 0.04) * 12;
-        ctx.arc(x, 150 + wave, 30, 0, Math.PI);
-        ctx.arc(x, this.map.height - 150 + wave, 30, Math.PI, 0);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    // 4. Snowy Peak Shoreline & Pine Trees
-    if (this.map.theme === 'cryo' || this.map.id === 'cryo_colosseum') {
-      const time = Date.now() * 0.002;
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.5;
-
-      ctx.beginPath();
-      for (let x = 100; x < this.map.width; x += 160) {
-        const wave = Math.sin(time + x * 0.05) * 8;
-        ctx.arc(x, 180 + wave, 24, 0, Math.PI);
-        ctx.arc(x, this.map.height - 180 + wave, 24, Math.PI, 0);
-      }
-      ctx.stroke();
-
-      const treeClusters = [
-        { x: 300, y: 300 },
-        { x: 360, y: 280 },
-        { x: 420, y: 310 },
-        { x: 480, y: 270 },
-        { x: 540, y: 300 },
-        { x: 1800, y: 300 },
-        { x: 1860, y: 270 },
-        { x: 1920, y: 310 },
-        { x: 1980, y: 280 },
-        { x: 300, y: 1900 },
-        { x: 360, y: 1870 },
-        { x: 420, y: 1910 },
-        { x: 1800, y: 1900 },
-        { x: 1860, y: 1870 },
-        { x: 1920, y: 1910 },
-      ];
-
-      for (const t of treeClusters) {
-        this.renderFrostedPineTree(ctx, t.x, t.y);
-      }
-    }
-
     ctx.restore();
   }
 
-  private renderFrostedPineTree(ctx: CanvasRenderingContext2D, x: number, y: number) {
-    ctx.save();
-    ctx.translate(x, y);
+  private lightenHex(hex: string, percent: number): string {
+    return hex;
+  }
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
-    ctx.beginPath();
-    ctx.ellipse(4, 8, 22, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#0f766e';
-    ctx.beginPath();
-    ctx.arc(0, 0, 20, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#5eead4';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.fillStyle = '#14b8a6';
-    ctx.beginPath();
-    ctx.arc(0, -2, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#99f6e4';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = '#e0f2fe';
-    ctx.beginPath();
-    ctx.arc(0, -4, 8, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
+  private darkenHex(hex: string, percent: number): string {
+    return hex;
   }
 }

@@ -2,81 +2,54 @@ import React, { useRef, useEffect } from 'react';
 import { GameEngine } from '../../game/GameEngine';
 import { MatchScore, CombatFeedEvent } from '../../types/game';
 import { WEAPONS } from '../../game/config/weapons';
-import {
-  Pause,
-  Play,
-  Zap,
-  Flame,
-  Radio,
-  Bomb,
-  Activity,
-  WifiOff,
-  Snowflake,
-  Rocket,
-  Shield,
-  Heart,
-  Flag,
-  Crosshair,
-  RotateCcw,
-} from 'lucide-react';
-
-const WEAPON_ICONS: Record<string, React.ElementType> = {
-  blaster: Zap,
-  vulcan: Flame,
-  laser: Radio,
-  mine: Bomb,
-  shockwave: Activity,
-  emp: WifiOff,
-  cryo: Snowflake,
-  rocket: Rocket,
-};
+import { Heart, Shield, Zap, Pause, Play, Award, Crosshair } from 'lucide-react';
 
 interface GameHUDProps {
-  engine: GameEngine | null;
+  engine: GameEngine;
   scores: MatchScore[];
-  combatFeed?: CombatFeedEvent[];
+  combatFeed: CombatFeedEvent[];
   timeLeft: number;
-  onPauseToggle: () => void;
   isPaused: boolean;
+  onPauseToggle: () => void;
   onQuitMatch: () => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
   engine,
   scores,
-  combatFeed = [],
+  combatFeed,
   timeLeft,
-  onPauseToggle,
   isPaused,
+  onPauseToggle,
   onQuitMatch,
 }) => {
   const minimapCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  if (!engine) return null;
-
   const player = engine.player;
-  const isBattleMode = engine.options.gameMode === 'battle';
-
-  // Active weapon
   const currentWeapon = player.currentWeapon ? WEAPONS[player.currentWeapon] : null;
-  const WeaponIcon = currentWeapon && WEAPON_ICONS[currentWeapon.id] ? WEAPON_ICONS[currentWeapon.id] : Zap;
 
-  // Approximate speed in KM/H
-  const speedKmh = Math.round((player.speed / 380) * 210);
+  // Speed in KM/H (speed * 0.42 scaled nicely)
+  const speedKmh = Math.round(player.speed * 0.42);
 
-  // Time formatted MM:SS
-  const mins = Math.floor(timeLeft / 60);
-  const secs = timeLeft % 60;
-  const timeFormatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  // Drift Sparks Gauge & Tier (0: None, 1: Blue, 2: Orange, 3: Supreme Purple)
+  const driftProgress = Math.min(1.0, player.driftTime / 2.2);
+  const driftTier = player.driftTier;
 
-  const currentLapFormatted = `${Math.floor(player.currentLapTimer / 60)}:${(player.currentLapTimer % 60).toFixed(2).padStart(5, '0')}`;
-  const bestLapFormatted = player.bestLapTime < 900
-    ? `${Math.floor(player.bestLapTime / 60)}:${(player.bestLapTime % 60).toFixed(3).padStart(6, '0')}`
-    : '--:--.---';
+  // Unified Lap Status
+  const currentLap = player.currentLap;
+  const isFinalLap = currentLap === 3;
+  const lapLabel = isFinalLap ? '🏁 FINAL LAP' : `🏁 LAP ${currentLap}/3`;
 
-  // Position / Rank
-  const playerRankIndex = scores.findIndex((s) => s.isPlayer);
-  const rankNumber = playerRankIndex >= 0 ? playerRankIndex + 1 : player.racePosition || 1;
+  // Lap Time & Best Lap
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    const ms = Math.floor((secs % 1) * 100);
+    return `${m}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+  };
+
+  // Rank computation
+  const rankNumber = player.racePosition || 1;
   const rankSuffix =
     rankNumber === 1 ? '1st' : rankNumber === 2 ? '2nd' : rankNumber === 3 ? '3rd' : `${rankNumber}th`;
 
@@ -142,7 +115,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       // Draw Mystery Pickups (Yellow dots)
       for (const p of engine.pickups) {
-        if (!p.isActive) continue;
+        if (!p.active) continue;
         ctx.fillStyle = '#facc15';
         ctx.beginPath();
         ctx.arc(pad + p.position.x * scaleX, pad + p.position.y * scaleY, 2.5, 0, Math.PI * 2);
@@ -155,6 +128,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
         ctx.arc(pad + b.position.x * scaleX, pad + b.position.y * scaleY, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Draw Remote Human Racers (Purple/Gold dots)
+      for (const r of engine.remotePlayers.values()) {
+        if (r.isDead) continue;
+        ctx.fillStyle = '#c084fc';
+        ctx.beginPath();
+        ctx.arc(pad + r.position.x * scaleX, pad + r.position.y * scaleY, 4, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -251,13 +233,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <div className="space-y-1">
               <div className="flex justify-between text-[8px] text-gray-300">
                 <span className="flex items-center gap-1 text-cyan-400">
-                  <Shield className="w-2.5 h-2.5 fill-cyan-400" /> SHIELD
+                  <Shield className="w-2.5 h-2.5 fill-cyan-500" /> SHIELD
                 </span>
                 <span className="font-mono">{Math.round(player.shield)}/{player.maxShield}</span>
               </div>
-              <div className="h-2 bg-[#0f172a] rounded-full overflow-hidden border border-white/10 p-0.5">
+              <div className="h-2.5 bg-[#0f172a] rounded-full overflow-hidden border border-white/10 p-0.5">
                 <div
-                  className="h-full bg-cyan-400 rounded-full transition-all duration-200 shadow-[0_0_8px_#00f0ff]"
+                  className="h-full rounded-full transition-all duration-200 bg-gradient-to-r from-blue-600 to-cyan-400"
                   style={{ width: `${Math.max(0, (player.shield / player.maxShield) * 100)}%` }}
                 />
               </div>
@@ -265,88 +247,109 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         </div>
 
-        {/* Top-Center: Active Weapon & Ammo Box */}
-        {currentWeapon && (
-          <div className="bg-[#1a142e]/95 backdrop-blur-md border-2 border-[#3d3166] px-5 py-2.5 rounded-2xl shadow-xl flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center border-2"
-              style={{ backgroundColor: `${currentWeapon.color}22`, borderColor: currentWeapon.color }}
-            >
-              <WeaponIcon className="w-5 h-5" style={{ color: currentWeapon.color }} />
-            </div>
-            <div className="text-left space-y-1">
-              <div className="text-[9px] text-white uppercase">{currentWeapon.name}</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[8px] text-gray-400">AMMO:</span>
-                <span className="text-xs text-yellow-400 font-mono font-bold">x{player.ammo}</span>
-                <span className="text-[7px] text-cyber-cyan bg-cyan-500/20 px-1.5 py-0.5 rounded border border-cyan-500/30">
-                  [SPACE] FIRE
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Top-Right: Timer, Kills & Position Badge */}
-        <div className="flex items-center gap-3">
-          {/* Time & Kills Plate */}
-          <div className="bg-[#1a142e]/95 backdrop-blur-md border-2 border-[#3d3166] px-4 py-2.5 rounded-2xl shadow-lg text-left text-[10px] space-y-1">
-            <div className="flex justify-between gap-3 text-gray-300">
-              <span className="text-gray-400">TIME:</span>
-              <span className="text-white font-mono">{timeFormatted}</span>
-            </div>
-            <div className="flex justify-between gap-3 text-gray-300">
-              <span className="text-rose-400">KILLS:</span>
-              <span className="text-yellow-400 font-mono">{player.kills}</span>
-            </div>
+        {/* Top-Center: Unified Lap / Final Lap Banner */}
+        <div className="flex flex-col items-center gap-1">
+          <div
+            className={`px-4 py-2 rounded-2xl border-2 backdrop-blur-md text-[10px] md:text-xs font-bold tracking-wider shadow-lg ${
+              isFinalLap
+                ? 'bg-rose-950/90 border-rose-500 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.6)] animate-pulse'
+                : 'bg-[#1a142e]/95 border-[#3d3166] text-yellow-400'
+            }`}
+          >
+            {lapLabel}
           </div>
 
-          {/* Position Badge */}
-          <div className={`px-5 py-3 rounded-2xl shadow-xl flex flex-col items-center justify-center ${rankBadgeStyle}`}>
-            <span className="text-[8px] uppercase tracking-widest opacity-80">POS</span>
-            <span className="text-base md:text-lg tracking-wider">{rankSuffix}</span>
+          <div className="text-[8px] font-mono text-gray-400 bg-black/60 px-3 py-1 rounded-full border border-white/10">
+            TIME: {formatTime(player.currentLapTimer)}
           </div>
+        </div>
+
+        {/* Top-Right: Rank Badge */}
+        <div
+          className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex flex-col items-center justify-center font-black ${rankBadgeStyle}`}
+        >
+          <Award className="w-3.5 h-3.5 mb-0.5" />
+          <span className="text-xs md:text-sm font-['Press_Start_2P',sans-serif]">{rankSuffix}</span>
         </div>
       </div>
 
-      {/* MID-RIGHT: Live Combat Killfeed */}
-      {combatFeed.length > 0 && (
-        <div className="self-end max-w-xs space-y-1.5 pointer-events-none pr-2">
-          {combatFeed.slice(-4).map((event) => (
-            <div
-              key={event.id}
-              className="bg-[#1a142e]/90 border border-[#3d3166] px-3 py-1.5 rounded-xl text-[8px] text-gray-200 shadow-md animate-fadeIn flex items-center gap-1.5"
-            >
-              <Crosshair className="w-2.5 h-2.5 text-rose-400 flex-shrink-0" />
-              <span>
-                <strong className="text-cyan-400">{event.killerName}</strong> blasted{' '}
-                <strong className="text-yellow-400">{event.victimName}</strong>
+      {/* BOTTOM BAR: Equipped Weapon, Speedometer & Minimap Radar */}
+      <div className="flex items-end justify-between gap-4 pointer-events-auto">
+        {/* Bottom-Left: Weapon Ammo Box */}
+        <div className="bg-[#1a142e]/95 backdrop-blur-md border-2 border-[#3d3166] p-3 md:p-4 rounded-3xl shadow-xl flex items-center gap-3">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-[#251e3d] border-2 border-[#4c3a7a] flex items-center justify-center text-2xl shadow-inner relative">
+            {currentWeapon ? (
+              <span>{currentWeapon.icon}</span>
+            ) : (
+              <Crosshair className="w-6 h-6 text-gray-600" />
+            )}
+            {player.weaponAmmo > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[8px] font-black px-1.5 py-0.5 rounded-md shadow">
+                x{player.weaponAmmo}
+              </span>
+            )}
+          </div>
+          <div>
+            <div className="text-[8px] text-gray-400">EQUIPPED WEAPON</div>
+            <div className="text-xs text-white tracking-wide mt-0.5">
+              {currentWeapon ? currentWeapon.name : 'EMPTY'}
+            </div>
+            <div className="text-[7px] text-gray-500 font-mono mt-0.5">PRESS SPACE / [E] TO FIRE</div>
+          </div>
+        </div>
+
+        {/* Bottom-Center: Speedometer & Drift Spark Gauge */}
+        <div className="flex flex-col items-center gap-2 bg-[#1a142e]/95 backdrop-blur-md border-2 border-[#3d3166] px-6 py-3 rounded-3xl shadow-xl">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl md:text-3xl font-black text-white font-mono tracking-tight">
+              {speedKmh}
+            </span>
+            <span className="text-[9px] text-gray-400 font-mono">KM/H</span>
+          </div>
+
+          {/* 3-Tier Drift Gauge */}
+          <div className="w-32 md:w-44 space-y-1">
+            <div className="flex justify-between text-[7px] text-gray-400">
+              <span>DRIFT BOOST</span>
+              <span
+                className={`font-bold ${
+                  driftTier === 3
+                    ? 'text-purple-400'
+                    : driftTier === 2
+                    ? 'text-orange-400'
+                    : driftTier === 1
+                    ? 'text-blue-400'
+                    : 'text-gray-500'
+                }`}
+              >
+                {driftTier === 3 ? 'SUPREME 🔥' : driftTier === 2 ? 'SUPER ⚡' : driftTier === 1 ? 'TIER 1' : 'READY'}
               </span>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* BOTTOM BAR: Minimap Radar, Speedometer & Drift Gauge */}
-      <div className="flex items-end justify-between gap-4 pointer-events-auto">
-        {/* Bottom-Left: Rebuilt Circular Radar Panel */}
-        <div className="bg-[#1a142e]/95 backdrop-blur-md border-2 border-[#3d3166] p-2 rounded-3xl shadow-xl flex flex-col items-center">
-          <canvas ref={minimapCanvasRef} width={110} height={110} className="rounded-full" />
-          <div className="pt-1 text-[8px] text-gray-400 tracking-wider">RADAR</div>
-        </div>
-
-        {/* Bottom-Center / Right: Speedometer & 3-Tier Drift Gauge */}
-        <div className="flex items-center gap-3">
-          <div className="bg-[#1a142e]/95 backdrop-blur-md border-2 border-[#3d3166] px-4 py-3 rounded-2xl shadow-lg space-y-1 min-w-[160px] text-center">
-            <div className="text-[9px] text-gray-400 uppercase tracking-widest">SPEED</div>
-            <div className="text-base md:text-lg text-cyber-cyan font-bold">{speedKmh} KM/H</div>
-            <div className="flex items-center justify-center gap-1.5 pt-1">
-              <span className="text-[8px] text-gray-400">DRIFT:</span>
-              <div className={`w-3 h-2 rounded-sm ${player.driftStage >= 1 ? 'bg-cyan-400 shadow-[0_0_8px_#00f0ff]' : 'bg-gray-700'}`}></div>
-              <div className={`w-3 h-2 rounded-sm ${player.driftStage >= 2 ? 'bg-orange-500 shadow-[0_0_8px_#f97316]' : 'bg-gray-700'}`}></div>
-              <div className={`w-3 h-2 rounded-sm ${player.driftStage >= 3 ? 'bg-purple-500 shadow-[0_0_8px_#a855f7] animate-pulse' : 'bg-gray-700'}`}></div>
+            <div className="h-2 bg-[#0f172a] rounded-full overflow-hidden border border-white/10 p-0.5">
+              <div
+                className={`h-full rounded-full transition-all duration-75 ${
+                  driftTier === 3
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-[0_0_10px_#c084fc]'
+                    : driftTier === 2
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-[0_0_8px_#f97316]'
+                    : driftTier === 1
+                    ? 'bg-gradient-to-r from-cyan-400 to-blue-500 shadow-[0_0_8px_#38bdf8]'
+                    : 'bg-gray-700'
+                }`}
+                style={{ width: `${driftProgress * 100}%` }}
+              />
             </div>
           </div>
+        </div>
+
+        {/* Bottom-Right: Circular Radar Minimap */}
+        <div className="relative">
+          <canvas
+            ref={minimapCanvasRef}
+            width={130}
+            height={130}
+            className="rounded-full shadow-[0_0_25px_rgba(99,102,241,0.4)]"
+          />
         </div>
       </div>
     </div>

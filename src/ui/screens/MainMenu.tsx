@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Play, Wrench, MapPin, ShoppingBag, CheckSquare, Trophy, Shield, Sparkles, ChevronRight, Zap } from 'lucide-react';
+import { Play, Wrench, MapPin, ShoppingBag, CheckSquare, Trophy, Sparkles, ChevronRight, Zap, Users, Coins } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { useWeb3 } from '../../web3/Web3Context';
 import { KART_CLASSES } from '../../game/config/kartClasses';
@@ -27,9 +27,10 @@ const MiniVehicleCanvas: React.FC<{ skinId: VehicleSkinId }> = ({ skinId }) => {
 interface MainMenuProps {
   onNavigate: (screen: string) => void;
   onQuickPlay: () => void;
+  onOpenMultiplayer: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onNavigate, onQuickPlay }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onNavigate, onQuickPlay, onOpenMultiplayer }) => {
   const { stats, garage, selectedMap, gameMode, quests } = useGameStore();
   const { smashBalance, account, connectWallet } = useWeb3();
   const currentKart = KART_CLASSES[garage.chassis];
@@ -74,16 +75,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onNavigate, onQuickPlay }) =
           </div>
         </div>
 
-        {/* Right: Quick Launch & Selected Config */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 z-10 w-full md:w-auto">
-          <div className="bg-monad-dark/70 border border-monad-border px-4 py-3 rounded-2xl text-left font-mono text-xs space-y-1 w-full sm:w-auto">
-            <div className="text-gray-400 text-[10px] uppercase">Selected Arena</div>
-            <div className="text-white font-bold flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-cyber-cyan" />
-              {currentMap.name}
-            </div>
-            <div className="text-monad-300 text-[10px] uppercase">{gameMode.replace('_', ' ')}</div>
-          </div>
+        {/* Right: Quick Launch & Multiplayer Buttons */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 z-10 w-full md:w-auto">
+          <button
+            onClick={onOpenMultiplayer}
+            className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-gradient-to-r from-[#8354fe] to-[#a855f7] hover:opacity-95 text-white font-['Press_Start_2P',sans-serif] text-xs tracking-wider shadow-[0_0_20px_rgba(131,84,254,0.6)] hover:scale-105 transition-all flex items-center justify-center gap-2 border border-[#c084fc]"
+          >
+            <Users className="w-4 h-4 text-yellow-300" />
+            <span>ONLINE PVP / WAGER</span>
+          </button>
 
           <button
             onClick={onQuickPlay}
@@ -97,6 +97,28 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onNavigate, onQuickPlay }) =
 
       {/* Grid of Main Sections */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Online Multiplayer Card */}
+        <div
+          onClick={onOpenMultiplayer}
+          className="group bg-gradient-to-br from-[#8354fe]/30 to-[#1a142e] border-2 border-[#8354fe] p-6 rounded-3xl cursor-pointer hover:-translate-y-1.5 transition-all shadow-[0_0_25px_rgba(131,84,254,0.4)] relative overflow-hidden"
+        >
+          <div className="flex items-start justify-between mb-4">
+            <div className="p-3.5 rounded-2xl bg-[#8354fe]/40 text-yellow-300 border border-[#a855f7] group-hover:scale-110 transition-transform">
+              <Coins className="w-6 h-6" />
+            </div>
+            <span className="px-2.5 py-1 rounded-lg bg-yellow-400/20 text-yellow-300 border border-yellow-400/40 text-[8px] font-['Press_Start_2P',sans-serif]">
+              MONAD PVP
+            </span>
+          </div>
+          <h3 className="font-display text-xl text-white mb-1.5">Online Multiplayer & Wager</h3>
+          <p className="text-gray-300 text-xs font-sans mb-4">
+            Create 6-digit room lobbies, invite friends, place MON wagers, or race casual 4-player PvP!
+          </p>
+          <div className="font-mono text-xs text-yellow-400 flex items-center gap-1 font-bold">
+            <span>⚔️ Create / Join Room →</span>
+          </div>
+        </div>
+
         {/* Garage Customization */}
         <div
           onClick={() => onNavigate('garage')}
@@ -180,7 +202,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onNavigate, onQuickPlay }) =
           </div>
         </div>
 
-        {/* Global Leaderboards */}
+        {/* Rankings & Leaderboards */}
         <div
           onClick={() => onNavigate('leaderboard')}
           className="group bg-monad-card/90 border border-monad-border hover:border-cyber-pink p-6 rounded-3xl cursor-pointer hover:-translate-y-1.5 transition-all shadow-lg relative overflow-hidden"
@@ -197,30 +219,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onNavigate, onQuickPlay }) =
           </p>
           <div className="font-mono text-xs text-cyber-pink flex items-center gap-1">
             <span>Seasonal Ladder Active</span>
-          </div>
-        </div>
-
-        {/* Monad Testnet Web3 Hub */}
-        <div
-          onClick={() => {
-            if (!account) connectWallet();
-            else onNavigate('shop');
-          }}
-          className="group bg-gradient-to-br from-monad-purple/20 to-monad-dark border border-monad-purple/50 p-6 rounded-3xl cursor-pointer hover:-translate-y-1.5 transition-all shadow-glow-purple relative overflow-hidden"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div className="p-3.5 rounded-2xl bg-monad-purple text-white shadow-glow-purple group-hover:scale-110 transition-transform">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white transition-colors" />
-          </div>
-          <h3 className="font-display text-xl text-white mb-1.5">Monad Web3 Vault</h3>
-          <p className="text-gray-400 text-xs font-sans mb-4">
-            {account ? 'Wallet connected! Claim rewards and mint on-chain Kart License NFT badges.' : 'Connect MetaMask or WalletConnect to link rewards directly to your wallet.'}
-          </p>
-          <div className="font-mono text-xs text-monad-300 flex items-center gap-1">
-            <Zap className="w-3.5 h-3.5 text-cyber-cyan" />
-            <span>{account ? 'Online on Monad Testnet' : 'Connect Wallet →'}</span>
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useWeb3 } from '../../web3/Web3Context';
-import { Volume2, VolumeX, Settings, Wallet, Zap, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, Settings, Wallet, Zap, Sparkles, Users } from 'lucide-react';
 import { SoundEngine } from '../../game/systems/SoundEngine';
 
 interface NavbarProps {
@@ -54,17 +54,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="hidden lg:flex items-center gap-1.5 bg-[#251e3d] p-1.5 rounded-2xl border border-[#3d3261]">
           {[
             { id: 'main_menu', label: 'HUB' },
+            { id: 'online_multiplayer', label: 'ONLINE PVP' },
             { id: 'garage', label: 'GARAGE' },
             { id: 'map_select', label: 'TRACKS' },
             { id: 'shop', label: 'SHOP' },
             { id: 'quests', label: 'QUESTS' },
+            { id: 'leaderboard', label: 'LEADERBOARD' },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => onNavigate(tab.id)}
               className={`px-3 py-1.5 rounded-xl text-[9px] transition-all ${
                 currentScreen === tab.id
-                  ? 'bg-[#9d3b76] text-white border border-[#d965a9] shadow'
+                  ? 'bg-[#8354fe] text-white border border-[#a855f7] shadow-[0_0_12px_rgba(131,84,254,0.6)]'
                   : 'text-gray-400 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -78,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="flex items-center gap-2.5">
         {/* Currency Pill */}
         <div className="hidden sm:flex items-center gap-2 bg-[#251e3d] px-3 py-1.5 rounded-xl border border-[#3d3261] text-[9px]">
-          <span className="text-yellow-400">🪙 {coins}</span>
+          <span className="text-yellow-400 font-bold" title="Native Monad Balance">⚡ {monBalance} MON</span>
           <span className="text-gray-600">|</span>
           <span className="text-cyber-cyan">{smashBalance} $SMASH</span>
         </div>

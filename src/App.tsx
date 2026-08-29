@@ -14,6 +14,7 @@ import { MainMenu } from './ui/screens/MainMenu';
 import { GarageScreen } from './ui/screens/GarageScreen';
 import { MapSelectScreen } from './ui/screens/MapSelectScreen';
 import { LobbyScreen } from './ui/screens/LobbyScreen';
+import { OnlineLobbyScreen } from './ui/screens/OnlineLobbyScreen';
 import { GameHUD } from './ui/screens/GameHUD';
 import { ResultsScreen } from './ui/screens/ResultsScreen';
 import { ShopScreen } from './ui/screens/ShopScreen';
@@ -26,6 +27,7 @@ interface GameArenaProps {
   botCount: number;
   botDifficulty: any;
   garage: any;
+  isMultiplayer?: boolean;
   onMatchEnd: (winner: MatchScore, allScores: MatchScore[]) => void;
   onQuitMatch: () => void;
 }
@@ -36,6 +38,7 @@ const GameArena: React.FC<GameArenaProps> = ({
   botCount,
   botDifficulty,
   garage,
+  isMultiplayer,
   onMatchEnd,
   onQuitMatch,
 }) => {
@@ -50,11 +53,14 @@ const GameArena: React.FC<GameArenaProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // In online multiplayer mode, botCount is strictly 0 (no bots)
+    const effectiveBotCount = isMultiplayer ? 0 : botCount;
+
     const gameEngine = new GameEngine({
       canvas,
       mapId,
       gameMode,
-      botCount,
+      botCount: effectiveBotCount,
       botDifficulty,
       playerClass: garage.chassis,
       playerName: garage.pilotName,
@@ -87,7 +93,7 @@ const GameArena: React.FC<GameArenaProps> = ({
       setEngine(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isMultiplayer]);
 
   const handlePauseToggle = () => {
     if (engine) {
@@ -115,11 +121,12 @@ const GameArena: React.FC<GameArenaProps> = ({
 };
 
 export const App: React.FC = () => {
-  const { stats, garage, selectedMap, gameMode, botCount, botDifficulty, recordMatchResult } = useGameStore();
+  const { stats, garage, selectedMap, setSelectedMap, gameMode, botCount, botDifficulty, recordMatchResult } = useGameStore();
   const { refreshBalances } = useWeb3();
 
   const [currentScreen, setCurrentScreen] = useState<string>('landing');
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isOnlineMatch, setIsOnlineMatch] = useState<boolean>(false);
 
   // Results State
   const [matchWinner, setMatchWinner] = useState<MatchScore | null>(null);
@@ -134,6 +141,14 @@ export const App: React.FC = () => {
     setCurrentScreen('results');
   }, [recordMatchResult, refreshBalances]);
 
+  const handleStartOnlineRace = (trackId: string, isOnline: boolean) => {
+    if (trackId) {
+      setSelectedMap(trackId);
+    }
+    setIsOnlineMatch(isOnline);
+    setCurrentScreen('game');
+  };
+
   return (
     <div className="min-h-screen bg-monad-dark text-white font-sans flex flex-col relative overflow-x-hidden">
       {/* Top Navbar */}
@@ -141,7 +156,10 @@ export const App: React.FC = () => {
         coins={stats.coins}
         level={stats.level}
         currentScreen={currentScreen}
-        onNavigate={(screen) => setCurrentScreen(screen)}
+        onNavigate={(screen) => {
+          setIsOnlineMatch(false);
+          setCurrentScreen(screen);
+        }}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
@@ -163,8 +181,22 @@ export const App: React.FC = () => {
 
         {currentScreen === 'main_menu' && (
           <MainMenu
-            onNavigate={(screen) => setCurrentScreen(screen)}
-            onQuickPlay={() => setCurrentScreen('lobby')}
+            onNavigate={(screen) => {
+              setIsOnlineMatch(false);
+              setCurrentScreen(screen);
+            }}
+            onQuickPlay={() => {
+              setIsOnlineMatch(false);
+              setCurrentScreen('lobby');
+            }}
+            onOpenMultiplayer={() => setCurrentScreen('online_multiplayer')}
+          />
+        )}
+
+        {currentScreen === 'online_multiplayer' && (
+          <OnlineLobbyScreen
+            onBack={() => setCurrentScreen('main_menu')}
+            onStartRace={(trackId) => handleStartOnlineRace(trackId, true)}
           />
         )}
 
@@ -178,14 +210,21 @@ export const App: React.FC = () => {
         {currentScreen === 'map_select' && (
           <MapSelectScreen
             onBack={() => setCurrentScreen('main_menu')}
-            onSelectMapAndProceed={() => setCurrentScreen('lobby')}
+            onSelectMapAndProceed={() => {
+              setIsOnlineMatch(false);
+              setCurrentScreen('lobby');
+            }}
           />
         )}
 
         {currentScreen === 'lobby' && (
           <LobbyScreen
             onBack={() => setCurrentScreen('map_select')}
-            onLaunchGame={() => setCurrentScreen('game')}
+            onLaunchGame={() => {
+              setIsOnlineMatch(false);
+              setCurrentScreen('game');
+            }}
+            onOpenMultiplayer={() => setCurrentScreen('online_multiplayer')}
           />
         )}
 
@@ -196,6 +235,7 @@ export const App: React.FC = () => {
             botCount={botCount}
             botDifficulty={botDifficulty}
             garage={garage}
+            isMultiplayer={isOnlineMatch}
             onMatchEnd={handleMatchFinish}
             onQuitMatch={() => setCurrentScreen('main_menu')}
           />
@@ -205,7 +245,10 @@ export const App: React.FC = () => {
           <ResultsScreen
             winner={matchWinner}
             allScores={finalScores}
-            onPlayAgain={() => setCurrentScreen('lobby')}
+            onPlayAgain={() => {
+              if (isOnlineMatch) setCurrentScreen('online_multiplayer');
+              else setCurrentScreen('lobby');
+            }}
             onReturnHub={() => setCurrentScreen('main_menu')}
           />
         )}
