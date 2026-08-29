@@ -59,17 +59,23 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({ onBack, on
   }, [net, onStartRace]);
 
   const handleCreateRoom = async () => {
-    if (wagerAmount !== '0' && !account) {
-      await connectWallet();
-      return;
+    try {
+      setErrorMsg(null);
+      if (wagerAmount !== '0' && !account) {
+        await connectWallet();
+      }
+      net.createRoom({
+        trackId: selectedTrack,
+        wagerAmount,
+        maxPlayers,
+        playerName,
+        walletAddress: account || undefined,
+      });
+      setInLobby(true);
+    } catch (err: any) {
+      console.error('Error creating room lobby:', err);
+      setErrorMsg(err?.message || 'Failed to create room lobby. Please try again.');
     }
-    net.createRoom({
-      trackId: selectedTrack,
-      wagerAmount,
-      maxPlayers,
-      playerName,
-      walletAddress: account || undefined,
-    });
   };
 
   const handleJoinRoom = async () => {
@@ -77,10 +83,17 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({ onBack, on
       setErrorMsg('Please enter a 6-digit room code');
       return;
     }
-    net.joinRoom(roomCodeInput.toUpperCase().trim(), {
-      playerName,
-      walletAddress: account || undefined,
-    });
+    try {
+      setErrorMsg(null);
+      net.joinRoom(roomCodeInput.toUpperCase().trim(), {
+        playerName,
+        walletAddress: account || undefined,
+      });
+      setInLobby(true);
+    } catch (err: any) {
+      console.error('Error joining room lobby:', err);
+      setErrorMsg(err?.message || 'Failed to join room lobby.');
+    }
   };
 
   const handleDepositWager = async () => {
@@ -388,10 +401,17 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({ onBack, on
       {/* Back Button */}
       <div className="z-10 pt-2">
         <button
-          onClick={onBack}
-          className="px-6 py-3 rounded-2xl bg-[#2b1f47] border border-[#483770] hover:bg-[#38285c] text-gray-300 text-xs transition-all font-sans"
+          onClick={() => {
+            if (inLobby) {
+              setInLobby(false);
+              net.disconnect();
+            } else {
+              onBack();
+            }
+          }}
+          className="px-6 py-3 rounded-2xl bg-[#2b1f47] border border-[#483770] hover:bg-[#38285c] text-gray-300 text-xs transition-all font-sans cursor-pointer"
         >
-          BACK
+          {inLobby ? 'LEAVE LOBBY' : 'BACK'}
         </button>
       </div>
     </div>
