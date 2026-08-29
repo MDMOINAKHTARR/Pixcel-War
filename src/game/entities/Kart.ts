@@ -362,6 +362,13 @@ export class Kart {
 
     this.shieldRechargeTimer = 0;
 
+    // Grant 1.8s hit cooldown invulnerability to prevent unfair chained hits
+    this.status.invulnerableTimer = 1.8;
+
+    // Fair recovery: preserve 60% speed momentum instead of stopping dead (0 km/h)
+    this.velocity.multiplyScalar(0.6);
+    this.speed = this.velocity.length();
+
     let remainingDmg = amount;
     if (this.shield > 0) {
       if (this.shield >= remainingDmg) {
@@ -396,10 +403,11 @@ export class Kart {
     if (this.status.invulnerableTimer > 0) return;
     if (type === 'freeze') {
       this.status.isFrozen = true;
-      this.status.frozenTimer = duration;
+      this.status.frozenTimer = Math.min(1.2, duration); // Punishing but not run-ending
+      this.velocity.multiplyScalar(0.7); // Maintain sliding momentum
     } else if (type === 'emp') {
       this.status.isEMPDisabled = true;
-      this.status.empTimer = duration;
+      this.status.empTimer = Math.min(1.8, duration);
     }
   }
 

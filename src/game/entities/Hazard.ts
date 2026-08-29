@@ -31,7 +31,6 @@ export class Hazard {
   }
 
   public containsPoint(pt: Vector2): boolean {
-    // Unrotate point around center
     const cx = this.position.x + this.width * 0.5;
     const cy = this.position.y + this.height * 0.5;
 
@@ -62,9 +61,17 @@ export class Hazard {
     const halfH = this.height * 0.5;
 
     if (this.type === 'boost_pad') {
-      // Golden Chevron Boost Strip (matching Pixel Wheels Screenshot 2)
-      ctx.fillStyle = 'rgba(23, 15, 38, 0.5)';
+      // Golden Chevron Boost Strip with Glowing Telegraphing Border
+      ctx.fillStyle = 'rgba(23, 15, 38, 0.65)';
       ctx.fillRect(-halfW, -halfH, this.width, this.height);
+
+      // Telegraphing Golden Edge Glow
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 12;
+      ctx.strokeRect(-halfW, -halfH, this.width, this.height);
+      ctx.shadowBlur = 0;
 
       const chevronCount = Math.max(3, Math.floor(this.height / 28));
       const stepY = this.height / chevronCount;
@@ -76,7 +83,7 @@ export class Hazard {
         ctx.save();
         ctx.translate(0, cy);
 
-        // Chevron Outer Border / Shadow
+        // Chevron Outer Border
         ctx.fillStyle = '#b45309';
         ctx.beginPath();
         ctx.moveTo(8 + pulse, 0);
@@ -106,12 +113,15 @@ export class Hazard {
         ctx.restore();
       }
     } else if (this.type === 'toxic_sludge') {
+      // Sludge with Pulsing Yellow Hazard Perimeter
       ctx.fillStyle = 'rgba(34, 197, 94, 0.45)';
       ctx.fillRect(-halfW, -halfH, this.width, this.height);
 
-      ctx.strokeStyle = '#22c55e';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(-halfW, -halfH, this.width, this.height);
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([8, 6]);
+      ctx.strokeRect(-halfW - 4, -halfH - 4, this.width + 8, this.height + 8);
+      ctx.setLineDash([]);
 
       // Sludge bubbles
       ctx.fillStyle = '#4ade80';
@@ -128,28 +138,21 @@ export class Hazard {
       ctx.fillRect(-halfW, -halfH, this.width, this.height);
 
       ctx.strokeStyle = '#67e8f9';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
       ctx.strokeRect(-halfW, -halfH, this.width, this.height);
-
-      // Ice sheen streaks
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.beginPath();
-      ctx.moveTo(-halfW * 0.7, -halfH * 0.5);
-      ctx.lineTo(halfW * 0.7, halfH * 0.5);
-      ctx.stroke();
     } else if (this.type === 'void_hazard') {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
       ctx.fillRect(-halfW, -halfH, this.width, this.height);
 
       ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.strokeRect(-halfW, -halfH, this.width, this.height);
 
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
-      ctx.font = '12px "Russo One", sans-serif';
+      ctx.fillStyle = '#ef4444';
+      ctx.font = '10px "Press Start 2P", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('DANGER VOID', 0, 0);
+      ctx.fillText('VOID', 0, 0);
     }
 
     ctx.restore();

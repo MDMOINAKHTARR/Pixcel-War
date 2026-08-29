@@ -10,6 +10,7 @@ import { MAPS } from './maps/MapData';
 import { Collision } from './physics/Collision';
 import { Vector2 } from './physics/Vector2';
 import { PixelCityRenderer } from './graphics/PixelCityRenderer';
+import { getPositionWeightedWeapon } from './config/weapons';
 import {
   MapDefinition,
   MatchScore,
@@ -370,9 +371,8 @@ export class GameEngine {
           pickup.respawnTimer = 0;
 
           if (pickup.type === 'mystery_box') {
-            const weapons: WeaponType[] = ['blaster', 'vulcan', 'laser', 'mine', 'shockwave', 'emp', 'cryo', 'rocket'];
-            const randomWeapon = weapons[Math.floor(Math.random() * weapons.length)];
-            kart.giveWeapon(randomWeapon);
+            const chosenWeapon = getPositionWeightedWeapon(kart.racePosition, allKarts.length);
+            kart.giveWeapon(chosenWeapon);
             this.particleEngine.emitShockwave(pickup.position, 40);
           } else if (pickup.type === 'nitro') {
             kart.applyBoost(2.2, 1.8);
