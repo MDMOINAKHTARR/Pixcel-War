@@ -42,7 +42,8 @@ const GameArena: React.FC<GameArenaProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [engine, setEngine] = useState<GameEngine | null>(null);
   const [matchScores, setMatchScores] = useState<MatchScore[]>([]);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [combatFeed, setCombatFeed] = useState<CombatFeedEvent[]>([]);
+  const [timeLeft, setTimeLeft] = useState<number>(90);
   const [isPaused, setIsPaused] = useState<boolean>(false);
 
   useEffect(() => {
@@ -66,6 +67,9 @@ const GameArena: React.FC<GameArenaProps> = ({
       matchDuration: 90,
       onScoreUpdate: (scores) => {
         setMatchScores(scores);
+      },
+      onCombatEvent: (event) => {
+        setCombatFeed((prev) => [...prev.slice(-8), event]);
       },
       onTimerTick: (time) => {
         setTimeLeft(time);
@@ -99,6 +103,7 @@ const GameArena: React.FC<GameArenaProps> = ({
         <GameHUD
           engine={engine}
           scores={matchScores}
+          combatFeed={combatFeed}
           timeLeft={timeLeft}
           isPaused={isPaused}
           onPauseToggle={handlePauseToggle}

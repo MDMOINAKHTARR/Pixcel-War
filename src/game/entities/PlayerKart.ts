@@ -9,6 +9,7 @@ export class PlayerKart extends Kart {
   public touchThrottle: number = 0;
   public touchSteer: number = 0;
   public touchDrift: boolean = false;
+  public touchFire: boolean = false;
 
   private onKeyDown: (e: KeyboardEvent) => void;
   private onKeyUp: (e: KeyboardEvent) => void;
@@ -71,6 +72,7 @@ export class PlayerKart extends Kart {
     let throttle = 0;
     let steer = 0;
     let drift = false;
+    let fire = false;
 
     // Keyboard Throttle (W / Up / S / Down)
     if (this.keys['KeyW'] || this.keys['ArrowUp'] || this.keys['w'] || this.keys['W']) throttle += 1;
@@ -80,25 +82,34 @@ export class PlayerKart extends Kart {
     if (this.keys['KeyA'] || this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) steer -= 1;
     if (this.keys['KeyD'] || this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) steer += 1;
 
-    // Drift (Shift / Space / KeyC)
-    if (
-      this.keys['ShiftLeft'] ||
-      this.keys['ShiftRight'] ||
-      this.keys['Space'] ||
-      this.keys['KeyC'] ||
-      this.keys[' '] ||
-      this.keys['shift'] ||
-      this.keys['c']
-    ) {
+    // Drift (Shift / KeyC)
+    if (this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.keys['KeyC'] || this.keys['shift'] || this.keys['c']) {
       drift = true;
+    }
+
+    // Fire Weapon (Space / KeyF / KeyE / KeyJ / Enter)
+    if (
+      this.keys['Space'] ||
+      this.keys['KeyF'] ||
+      this.keys['KeyE'] ||
+      this.keys['KeyJ'] ||
+      this.keys['Enter'] ||
+      this.keys[' '] ||
+      this.keys['f'] ||
+      this.keys['e'] ||
+      this.keys['j'] ||
+      this.keys['enter']
+    ) {
+      fire = true;
     }
 
     // Blend touch / mobile virtual joystick if active
     if (Math.abs(this.touchThrottle) > 0.01) throttle = this.touchThrottle;
     if (Math.abs(this.touchSteer) > 0.01) steer = this.touchSteer;
     if (this.touchDrift) drift = true;
+    if (this.touchFire) fire = true;
 
-    return { throttle, steer, drift };
+    return { throttle, steer, drift, fire };
   }
 
   public destroy() {

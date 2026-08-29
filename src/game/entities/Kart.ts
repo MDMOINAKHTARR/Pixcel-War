@@ -4,17 +4,20 @@ import {
   KartClassId,
   DriftStage,
   KartStatusEffects,
+  WeaponType,
 } from '../../types/game';
 import { KART_CLASSES } from '../config/kartClasses';
+import { WEAPONS } from '../config/weapons';
 import { ParticleEngine } from '../systems/ParticleEngine';
 import { SoundEngine } from '../systems/SoundEngine';
 import { PixelArtVehicles, VehicleSkinId } from '../graphics/PixelArtVehicles';
+import { Projectile } from './Projectile';
 
 export interface KartInput {
   throttle: number; // -1 (reverse) to 1 (forward)
   steer: number;    // -1 (left) to 1 (right)
   drift: boolean;   // Holding drift
-  fire?: boolean;   // Unused in pure racing
+  fire?: boolean;   // Firing weapon
 }
 
 export class Kart {
@@ -44,7 +47,28 @@ export class Kart {
   public driftTime: number = 0;
   public driftStage: DriftStage = 0;
 
-  // Pure Racing & Lap Progression
+  // Combat Stats
+  public health: number;
+  public maxHealth: number;
+  public shield: number;
+  public maxShield: number;
+  public shieldRechargeTimer: number = 0;
+  public shieldRechargeRate: number = 16; // HP per sec
+
+  public kills: number = 0;
+  public deaths: number = 0;
+  public score: number = 0;
+  public damageDealt: number = 0;
+  public coinsCollected: number = 0;
+  public isDead: boolean = false;
+  public respawnTimer: number = 0;
+
+  // Weapon Inventory
+  public currentWeapon: WeaponType | null = null;
+  public ammo: number = 0;
+  public weaponCooldownTimer: number = 0;
+
+  // Racing & Lap Progression
   public currentLap: number = 1;
   public totalLaps: number = 3;
   public currentWaypointIndex: number = 0;
@@ -54,9 +78,8 @@ export class Kart {
   public raceFinished: boolean = false;
   public raceFinishTime: number = 0;
   public racePosition: number = 1;
-  public coinsCollected: number = 0;
 
-  // Status Effects (Boosts)
+  // Status Effects
   public status: KartStatusEffects = {
     isFrozen: false,
     frozenTimer: 0,
@@ -81,7 +104,7 @@ export class Kart {
     pos: Vector2,
     angle: number = 0,
     isPlayer: boolean = false,
-    customColors?: { body?: string; accent?: string; underglow?: string }
+    customColors?: { body?: string; accent?: string; underglow?: string; skinId?: any }
   ) {
     this.id = id;
     this.name = name;
@@ -92,6 +115,11 @@ export class Kart {
     this.position = pos.clone();
     this.velocity = new Vector2(0, 0);
     this.angle = angle;
+
+    this.maxHealth = this.classDef.stats.maxHealth || 100;
+    this.health = this.maxHealth;
+    this.maxShield = this.classDef.stats.maxShield || 50;
+    this.shield = this.maxShield;
 
     this.bodyColor = customColors?.body || this.classDef.color;
     this.accentColor = customColors?.accent || this.classDef.accentColor;
@@ -105,6 +133,9 @@ export class Kart {
       cyber: 'dark_m',
     };
     this.skinId = (customColors as { skinId?: VehicleSkinId })?.skinId || skinMap[classId] || 'red';
+
+    // Start armed with Twin Blaster
+    this.giveWeapon('blaster', 8);
   }
 
   public update(
@@ -113,18 +144,47 @@ export class Kart {
     particleEngine: ParticleEngine,
     soundEngine: SoundEngine
   ) {
-    if (this.raceFinished) {
-      // Auto-decelerate slowly across the finish line
-      this.velocity.multiplyScalar(0.96);
-      this.position.add(this.velocity.clone().multiplyScalar(dt));
-      this.speed = this.velocity.length();
+    // 1. Process Respawn
+    if (this.isDead) {
+      this.respawnTimer -= dt;
       return;
     }
 
     // Advance lap timer
     this.currentLapTimer += dt;
 
-    // 1. Process Status Effects
+    // 2. Weapon Cooldowns & Shield Recharge
+    if (this.weaponCooldownTimer > 0) {
+      this.weaponCooldownTimer -= dt * 1000;
+    }
+
+    this.shieldRechargeTimer += dt;
+    if (this.shieldRechargeTimer > 3.5 && this.shield < this.maxShield) {
+      this.shield = Math.min(this.maxShield, this.shield + this.shieldRechargeRate * dt);
+    }
+
+    // 3. Process Status Effects
+    if (this.status.invulnerableTimer > 0) {
+      this.status.invulnerableTimer -= dt;
+    }
+
+    if (this.status.isFrozen) {
+      this.status.frozenTimer -= dt;
+      if (this.status.frozenTimer <= 0) {
+        this.status.isFrozen = false;
+        particleEngine.emitIceShatter(this.position);
+      }
+    }
+
+    if (this.status.isEMPDisabled) {
+      this.status.empTimer -= dt;
+      if (this.status.empTimer <= 0) {
+        this.status.isEMPDisabled = false;
+      } else if (Math.random() > 0.6) {
+        particleEngine.emitDriftSparks(this.position, this.angle, 1);
+      }
+    }
+
     if (this.status.isBoosting) {
       this.status.boostTimer -= dt;
       if (this.status.boostTimer <= 0) {
@@ -133,10 +193,10 @@ export class Kart {
       }
     }
 
-    // 2. Process Physics & Steering
+    // 4. Process Physics & Steering
     this.processMovement(dt, input, particleEngine, soundEngine);
 
-    // 3. Tire Skid Marks
+    // 5. Tire Skid Marks
     const maxSpeed = this.classDef.stats.topSpeed;
     if (this.isDrifting || (this.speed > maxSpeed * 0.6 && Math.abs(input.steer) > 0.6)) {
       const perpDir = new Vector2(-Math.sin(this.angle), Math.cos(this.angle));
@@ -161,6 +221,13 @@ export class Kart {
     particleEngine: ParticleEngine,
     soundEngine: SoundEngine
   ) {
+    if (this.status.isFrozen) {
+      this.velocity.multiplyScalar(0.985);
+      this.position.add(this.velocity.clone().multiplyScalar(dt));
+      this.speed = this.velocity.length();
+      return;
+    }
+
     const stats = this.classDef.stats;
     let maxSpeed = stats.topSpeed;
     let accel = stats.acceleration;
@@ -169,6 +236,11 @@ export class Kart {
     if (this.status.isBoosting) {
       maxSpeed *= this.status.boostMultiplier;
       accel *= 1.8;
+    }
+
+    if (this.status.isEMPDisabled) {
+      turnSpeed *= 0.3;
+      accel *= 0.4;
     }
 
     // Steering
@@ -235,7 +307,7 @@ export class Kart {
       this.velocity.multiplyScalar(Math.pow(0.92, dt * 60));
     }
 
-    // Lateral tire grip
+    // Lateral grip
     const rightDir = new Vector2(-forwardDir.y, forwardDir.x);
     const lateralVel = rightDir.clone().multiplyScalar(this.velocity.dot(rightDir));
     const forwardVel = forwardDir.clone().multiplyScalar(this.velocity.dot(forwardDir));
@@ -246,6 +318,108 @@ export class Kart {
     // Update Position
     this.position.add(this.velocity.clone().multiplyScalar(dt));
     this.speed = this.velocity.length();
+  }
+
+  public fireWeapon(targetPos?: Vector2): Projectile[] | null {
+    if (this.isDead || !this.currentWeapon || this.ammo <= 0 || this.weaponCooldownTimer > 0) {
+      return null;
+    }
+
+    const def = WEAPONS[this.currentWeapon];
+    this.weaponCooldownTimer = def.cooldown * (this.classDef.stats.cooldownReduction || 1.0);
+    this.ammo--;
+
+    const projectiles: Projectile[] = [];
+    const forwardDir = Vector2.fromAngle(this.angle);
+    const muzzlePos = this.position.clone().add(forwardDir.clone().multiplyScalar(22));
+
+    if (this.currentWeapon === 'blaster') {
+      const perp = new Vector2(-forwardDir.y, forwardDir.x).multiplyScalar(7);
+      projectiles.push(new Projectile(this.id, this.name, 'blaster', muzzlePos.clone().add(perp), this.angle));
+      projectiles.push(new Projectile(this.id, this.name, 'blaster', muzzlePos.clone().subtract(perp), this.angle));
+    } else if (this.currentWeapon === 'rocket') {
+      this.applyBoost(1.6, 2.2);
+    } else {
+      projectiles.push(new Projectile(this.id, this.name, this.currentWeapon, muzzlePos, this.angle, targetPos));
+    }
+
+    if (this.ammo <= 0) {
+      this.currentWeapon = 'blaster';
+      this.ammo = 8;
+    }
+
+    return projectiles;
+  }
+
+  public giveWeapon(type: WeaponType, ammo?: number) {
+    this.currentWeapon = type;
+    this.ammo = ammo || WEAPONS[type].ammo;
+    this.weaponCooldownTimer = 0;
+  }
+
+  public takeDamage(amount: number, attacker?: Kart): boolean {
+    if (this.isDead || this.status.invulnerableTimer > 0) return false;
+
+    this.shieldRechargeTimer = 0;
+
+    let remainingDmg = amount;
+    if (this.shield > 0) {
+      if (this.shield >= remainingDmg) {
+        this.shield -= remainingDmg;
+        remainingDmg = 0;
+      } else {
+        remainingDmg -= this.shield;
+        this.shield = 0;
+      }
+    }
+
+    if (remainingDmg > 0) {
+      this.health -= remainingDmg;
+      if (this.health <= 0) {
+        this.health = 0;
+        this.isDead = true;
+        this.deaths++;
+        this.respawnTimer = 2.5;
+
+        if (attacker && attacker.id !== this.id) {
+          attacker.kills++;
+          attacker.score += 150;
+          attacker.coinsCollected += 50;
+        }
+        return true; // Fatal elimination!
+      }
+    }
+    return false;
+  }
+
+  public applyStatus(type: 'freeze' | 'emp', duration: number) {
+    if (this.status.invulnerableTimer > 0) return;
+    if (type === 'freeze') {
+      this.status.isFrozen = true;
+      this.status.frozenTimer = duration;
+    } else if (type === 'emp') {
+      this.status.isEMPDisabled = true;
+      this.status.empTimer = duration;
+    }
+  }
+
+  public heal(amount: number) {
+    this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  public rechargeShield(amount: number) {
+    this.shield = Math.min(this.maxShield, this.shield + amount);
+  }
+
+  public respawn(pos: Vector2, angle: number) {
+    this.position = pos.clone();
+    this.velocity = new Vector2(0, 0);
+    this.angle = angle;
+    this.health = this.maxHealth;
+    this.shield = this.maxShield;
+    this.isDead = false;
+    this.status.invulnerableTimer = 3.0;
+    this.giveWeapon('blaster', 8);
   }
 
   public completeLap() {
@@ -269,8 +443,15 @@ export class Kart {
   }
 
   public render(ctx: CanvasRenderingContext2D) {
+    if (this.isDead) return;
+
     ctx.save();
     ctx.translate(this.position.x, this.position.y);
+
+    // Invulnerability flashing
+    if (this.status.invulnerableTimer > 0 && Math.sin(Date.now() * 0.03) > 0) {
+      ctx.globalAlpha = 0.4;
+    }
 
     // Neon Underglow
     ctx.shadowBlur = 18;
@@ -287,7 +468,33 @@ export class Kart {
 
     ctx.restore();
 
-    // Overhead Pilot Name Tag
+    // Shield Bubble if active
+    if (this.shield > 0) {
+      ctx.save();
+      ctx.translate(this.position.x, this.position.y);
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(0, 0, 26, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Frozen Ice Cube
+    if (this.status.isFrozen) {
+      ctx.save();
+      ctx.translate(this.position.x, this.position.y);
+      ctx.fillStyle = 'rgba(165, 243, 252, 0.65)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.fillRect(-22, -22, 44, 44);
+      ctx.strokeRect(-22, -22, 44, 44);
+      ctx.restore();
+    }
+
+    // Overhead Pilot Health / Shield HUD
     this.renderOverheadHUD(ctx);
   }
 
@@ -301,7 +508,27 @@ export class Kart {
     ctx.fillStyle = this.isPlayer ? '#00f0ff' : '#ffffff';
     ctx.shadowBlur = 4;
     ctx.shadowColor = '#000000';
-    ctx.fillText(this.name, this.position.x, hudY);
+    ctx.fillText(this.name, this.position.x, hudY - 7);
+
+    const barW = 38;
+    const barH = 4;
+    const barX = this.position.x - barW * 0.5;
+
+    // Background
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(barX - 1, hudY - 1, barW + 2, barH + 6);
+
+    // Health Bar
+    const hpRatio = Math.max(0, this.health / this.maxHealth);
+    ctx.fillStyle = hpRatio > 0.5 ? '#22c55e' : hpRatio > 0.25 ? '#eab308' : '#ef4444';
+    ctx.fillRect(barX, hudY, barW * hpRatio, barH);
+
+    // Shield Bar
+    if (this.maxShield > 0) {
+      const shieldRatio = Math.max(0, this.shield / this.maxShield);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(barX, hudY + barH + 1, barW * shieldRatio, 2);
+    }
 
     ctx.restore();
   }

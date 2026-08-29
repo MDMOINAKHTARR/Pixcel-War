@@ -1,6 +1,8 @@
 import { PlayerKart } from './entities/PlayerKart';
 import { BotKart } from './entities/BotKart';
 import { Kart, KartInput } from './entities/Kart';
+import { Projectile } from './entities/Projectile';
+import { Pickup } from './entities/Pickup';
 import { Hazard } from './entities/Hazard';
 import { ParticleEngine } from './systems/ParticleEngine';
 import { SoundEngine } from './systems/SoundEngine';
@@ -10,9 +12,11 @@ import { Vector2 } from './physics/Vector2';
 import {
   MapDefinition,
   MatchScore,
+  CombatFeedEvent,
   GameMode,
   BotDifficulty,
   KartClassId,
+  WeaponType,
 } from '../types/game';
 
 export interface GameEngineOptions {
@@ -26,6 +30,7 @@ export interface GameEngineOptions {
   playerColors?: { body?: string; accent?: string; underglow?: string; skinId?: any };
   matchDuration?: number;
   onScoreUpdate?: (scores: MatchScore[]) => void;
+  onCombatEvent?: (event: CombatFeedEvent) => void;
   onMatchEnd?: (winner: MatchScore, allScores: MatchScore[]) => void;
   onTimerTick?: (timeLeft: number) => void;
 }
@@ -33,19 +38,22 @@ export interface GameEngineOptions {
 export class GameEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private options: GameEngineOptions;
+  public options: GameEngineOptions;
 
   public map: MapDefinition;
   public player: PlayerKart;
   public bots: BotKart[] = [];
+  public projectiles: Projectile[] = [];
+  public pickups: Pickup[] = [];
   public hazards: Hazard[] = [];
 
   public particleEngine: ParticleEngine;
   public soundEngine: SoundEngine;
 
-  // Camera
+  // Camera & Screen Shake
   public cameraPos: Vector2 = new Vector2(0, 0);
   public zoom: number = 1.0;
+  public screenShake: number = 0;
 
   // Loop & Timing
   private isRunning: boolean = false;
@@ -53,9 +61,10 @@ export class GameEngine {
   private lastTime: number = 0;
   private animFrameId: number | null = null;
 
-  public raceTimer: number = 0;
+  public matchTimer: number = 90;
   public isMatchOver: boolean = false;
   private scoreUpdateTimer: number = 0;
+  private lastReportedSecond: number = -1;
 
   constructor(options: GameEngineOptions) {
     this.options = options;
@@ -65,7 +74,7 @@ export class GameEngine {
     this.ctx = ctx;
 
     this.map = MAPS[options.mapId] || MAPS['neon_city'];
-    this.raceTimer = 0;
+    this.matchTimer = options.matchDuration || 90;
 
     this.particleEngine = new ParticleEngine();
     this.soundEngine = SoundEngine.getInstance();
@@ -85,8 +94,8 @@ export class GameEngine {
     // Spawn Bots
     this.initBots();
 
-    // Spawn Boost Pads
-    this.initHazards();
+    // Spawn Pickups & Hazards
+    this.initMapEntities();
 
     // Initial Camera
     this.cameraPos.copy(this.player.position);
@@ -147,7 +156,13 @@ export class GameEngine {
     }
   }
 
-  private initHazards() {
+  private initMapEntities() {
+    // Pickups (Mystery Crates, Nitros, Health, Shields, Coins)
+    for (const p of this.map.pickupSpawns) {
+      this.pickups.push(new Pickup(p.type, new Vector2(p.x, p.y)));
+    }
+
+    // Boost Pads & Hazards
     for (const h of this.map.hazards) {
       this.hazards.push(new Hazard(h));
     }
@@ -189,7 +204,6 @@ export class GameEngine {
     let dt = (currentTime - this.lastTime) / 1000;
     this.lastTime = currentTime;
 
-    // Cap delta time to prevent physics tunneling
     if (dt > 0.1) dt = 0.1;
 
     if (!this.isPaused && !this.isMatchOver) {
@@ -202,39 +216,190 @@ export class GameEngine {
   };
 
   private update(dt: number) {
-    this.raceTimer += dt;
-    if (this.options.onTimerTick) {
-      this.options.onTimerTick(Math.floor(this.raceTimer));
+    const isBattleMode = this.options.gameMode === 'battle';
+
+    // 1. Timer countdown
+    this.matchTimer -= dt;
+    const currentSec = Math.ceil(this.matchTimer);
+    if (currentSec !== this.lastReportedSecond) {
+      this.lastReportedSecond = currentSec;
+      if (this.options.onTimerTick) {
+        this.options.onTimerTick(Math.max(0, currentSec));
+      }
+    }
+
+    if (this.matchTimer <= 0 && !this.isMatchOver) {
+      this.endMatch();
+      return;
+    }
+
+    // Screen Shake decay
+    if (this.screenShake > 0) {
+      this.screenShake = Math.max(0, this.screenShake - dt * 25);
     }
 
     const allKarts: Kart[] = [this.player, ...this.bots];
 
-    // 1. Update Boost Pads
-    for (const hazard of this.hazards) {
-      hazard.update(dt);
+    // 2. Update Pickups & Hazards
+    for (const p of this.pickups) {
+      p.update(dt);
+    }
+    for (const h of this.hazards) {
+      h.update(dt);
     }
 
-    // 2. Update Player Kart
+    // 3. Update Player
     const playerInput = this.player.getInput();
     this.player.update(dt, playerInput, this.particleEngine, this.soundEngine);
     this.player.checkWaypointProgress(this.map.waypoints);
 
-    // Update Engine Sound
+    // Player Weapon Firing
+    if (playerInput.fire) {
+      const shots = this.player.fireWeapon();
+      if (shots && shots.length > 0) {
+        this.projectiles.push(...shots);
+        this.soundEngine.playWeaponFire(shots[0].type);
+      }
+    }
+
+    // Engine Sound
     const maxSpeed = this.player.classDef.stats.topSpeed;
     const speedRatio = Math.min(1.0, this.player.speed / maxSpeed);
     this.soundEngine.updateEngineSound(speedRatio, playerInput.throttle > 0);
 
-    // 3. Update Bot Karts
+    // 4. Update Bot AI & Firing
     for (const bot of this.bots) {
-      const botInput = bot.updateAI(dt, allKarts, this.map.waypoints);
+      const botInput = bot.updateAI(dt, allKarts, this.pickups, this.map.waypoints, isBattleMode);
       bot.update(dt, botInput, this.particleEngine, this.soundEngine);
+
+      if (botInput.fire) {
+        const shots = bot.fireWeapon(bot.targetPos);
+        if (shots && shots.length > 0) {
+          this.projectiles.push(...shots);
+          if (this.cameraPos.distanceTo(bot.position) < 800) {
+            this.soundEngine.playWeaponFire(shots[0].type);
+          }
+        }
+      }
     }
 
-    // 4. Kart vs Kart Elastic Collisions
+    // 5. Update Projectiles
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const proj = this.projectiles[i];
+      proj.update(dt, this.particleEngine);
+
+      if (proj.isDead) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check Projectile vs Obstacle Collisions
+      for (const obs of this.map.obstacles) {
+        const resolution = Collision.resolveCircleBox(proj.position, proj.radius, obs.x, obs.y, obs.width, obs.height);
+        if (resolution.collided) {
+          proj.isDead = true;
+          this.particleEngine.emitExplosion(proj.position, 15);
+          this.soundEngine.playHit();
+          break;
+        }
+      }
+
+      if (proj.isDead) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check Projectile vs Kart Collisions
+      for (const kart of allKarts) {
+        if (kart.isDead) continue;
+        if (proj.ownerId === kart.id && !proj.isMine && proj.distanceTraveled < 40) continue;
+        if (proj.isMine && !proj.mineArmed) continue;
+
+        if (Collision.circleCircle(proj.position, proj.radius, kart.position, kart.radius)) {
+          proj.isDead = true;
+
+          const attacker = allKarts.find((k) => k.id === proj.ownerId);
+          const wasFatal = kart.takeDamage(proj.def.damage, attacker);
+
+          // Status effects
+          if (proj.type === 'cryo') {
+            kart.applyStatus('freeze', 2.0);
+            this.particleEngine.emitIceShatter(kart.position);
+          } else if (proj.type === 'emp') {
+            kart.applyStatus('emp', 2.5);
+          }
+
+          // FX
+          this.particleEngine.emitExplosion(proj.position, 25);
+          this.soundEngine.playExplosion();
+
+          if (kart.isPlayer || proj.ownerId === this.player.id) {
+            this.screenShake = 12;
+          }
+
+          // Record Combat Feed Event
+          if (this.options.onCombatEvent) {
+            this.options.onCombatEvent({
+              id: Math.random().toString(36).substring(2, 9),
+              killerName: proj.ownerName,
+              victimName: kart.name,
+              weapon: proj.type,
+              timestamp: Date.now(),
+            });
+          }
+
+          break;
+        }
+      }
+
+      if (proj.isDead) {
+        this.projectiles.splice(i, 1);
+      }
+    }
+
+    // 6. Kart vs Pickup Collisions
+    for (const kart of allKarts) {
+      if (kart.isDead) continue;
+
+      for (const pickup of this.pickups) {
+        if (!pickup.isActive) continue;
+
+        if (Collision.circleCircle(kart.position, kart.radius, pickup.position, pickup.radius)) {
+          pickup.isActive = false;
+          pickup.respawnTimer = 0;
+
+          if (pickup.type === 'mystery_box') {
+            const weapons: WeaponType[] = ['blaster', 'vulcan', 'laser', 'mine', 'shockwave', 'emp', 'cryo', 'rocket'];
+            const randomWeapon = weapons[Math.floor(Math.random() * weapons.length)];
+            kart.giveWeapon(randomWeapon);
+            this.particleEngine.emitShockwave(pickup.position, 40);
+          } else if (pickup.type === 'nitro') {
+            kart.applyBoost(2.2, 1.8);
+            this.particleEngine.emitBoostFlames(kart.position, kart.angle);
+          } else if (pickup.type === 'repair_kit') {
+            kart.heal(50);
+          } else if (pickup.type === 'shield_pack') {
+            kart.rechargeShield(40);
+          } else if (pickup.type === 'monad_coin') {
+            kart.coinsCollected += 10;
+            kart.score += 25;
+            this.particleEngine.emitCoinSparkles(pickup.position);
+          }
+
+          if (kart.isPlayer) {
+            this.soundEngine.playPickup(pickup.type);
+          }
+        }
+      }
+    }
+
+    // 7. Kart vs Kart Elastic Collisions
     for (let i = 0; i < allKarts.length; i++) {
       for (let j = i + 1; j < allKarts.length; j++) {
         const kA = allKarts[i];
         const kB = allKarts[j];
+        if (kA.isDead || kB.isDead) continue;
+
         if (Collision.circleCircle(kA.position, kA.radius, kB.position, kB.radius)) {
           Collision.resolveElasticCollision(
             kA.position,
@@ -252,8 +417,16 @@ export class GameEngine {
       }
     }
 
-    // 5. Kart vs Obstacle Collisions
+    // 8. Kart vs Obstacle & Boost Pad Triggers
     for (const kart of allKarts) {
+      if (kart.isDead) {
+        if (kart.respawnTimer <= 0) {
+          const pSpawn = this.map.playerSpawns[Math.floor(Math.random() * this.map.playerSpawns.length)];
+          kart.respawn(new Vector2(pSpawn.x, pSpawn.y), pSpawn.rotation);
+        }
+        continue;
+      }
+
       for (const obs of this.map.obstacles) {
         const resolution = Collision.resolveCircleBox(kart.position, kart.radius, obs.x, obs.y, obs.width, obs.height);
         if (resolution.collided) {
@@ -263,7 +436,6 @@ export class GameEngine {
         }
       }
 
-      // 6. Kart vs Boost Pad Trigger
       for (const hazard of this.hazards) {
         if (hazard.type === 'boost_pad' && hazard.containsPoint(kart.position)) {
           kart.applyBoost(1.4, 1.6);
@@ -274,64 +446,68 @@ export class GameEngine {
         }
       }
 
-      // 7. Clamp to Arena Boundaries
+      // Clamp to arena
       kart.position.x = Math.max(kart.radius, Math.min(this.map.width - kart.radius, kart.position.x));
       kart.position.y = Math.max(kart.radius, Math.min(this.map.height - kart.radius, kart.position.y));
     }
 
-    // 8. Update Particle Engine
+    // 9. Update Particles
     this.particleEngine.update(dt);
 
-    // 9. Dynamic Camera
-    const targetCamX = this.player.position.x + Math.cos(this.player.angle) * this.player.speed * 0.25;
-    const targetCamY = this.player.position.y + Math.sin(this.player.angle) * this.player.speed * 0.25;
+    // 10. Dynamic Camera with Screen Shake
+    const shakeOffsetX = (Math.random() - 0.5) * this.screenShake;
+    const shakeOffsetY = (Math.random() - 0.5) * this.screenShake;
+    const targetCamX = this.player.position.x + Math.cos(this.player.angle) * this.player.speed * 0.25 + shakeOffsetX;
+    const targetCamY = this.player.position.y + Math.sin(this.player.angle) * this.player.speed * 0.25 + shakeOffsetY;
     this.cameraPos.x += (targetCamX - this.cameraPos.x) * dt * 5.5;
     this.cameraPos.y += (targetCamY - this.cameraPos.y) * dt * 5.5;
 
-    // 10. Position Tracking & Scoring (Throttled)
+    // 11. Position Tracking & Scoring Update
     this.scoreUpdateTimer += dt;
     if (this.scoreUpdateTimer >= 0.2) {
       this.scoreUpdateTimer = 0;
 
-      // Rank based on laps completed, current waypoint, and distance to next waypoint
-      const wp = this.map.waypoints;
-      allKarts.sort((a, b) => {
-        const aTargetWp = wp[a.currentWaypointIndex % wp.length];
-        const bTargetWp = wp[b.currentWaypointIndex % wp.length];
-        const aDist = a.position.distanceTo(new Vector2(aTargetWp.x, aTargetWp.y));
-        const bDist = b.position.distanceTo(new Vector2(bTargetWp.x, bTargetWp.y));
-
-        const aScore = a.currentLap * 100000 + a.currentWaypointIndex * 1000 - aDist;
-        const bScore = b.currentLap * 100000 + b.currentWaypointIndex * 1000 - bDist;
-        return bScore - aScore;
-      });
+      if (isBattleMode) {
+        allKarts.sort((a, b) => b.score - a.score || b.kills - a.kills);
+      } else {
+        const wp = this.map.waypoints;
+        allKarts.sort((a, b) => {
+          const aTargetWp = wp[a.currentWaypointIndex % wp.length];
+          const bTargetWp = wp[b.currentWaypointIndex % wp.length];
+          const aDist = a.position.distanceTo(new Vector2(aTargetWp.x, aTargetWp.y));
+          const bDist = b.position.distanceTo(new Vector2(bTargetWp.x, bTargetWp.y));
+          const aScore = a.currentLap * 100000 + a.currentWaypointIndex * 1000 - aDist;
+          const bScore = b.currentLap * 100000 + b.currentWaypointIndex * 1000 - bDist;
+          return bScore - aScore;
+        });
+      }
 
       allKarts.forEach((k, idx) => {
         k.racePosition = idx + 1;
       });
 
       if (this.options.onScoreUpdate) {
-        const scores: MatchScore[] = allKarts.map((k, idx) => ({
+        const scores: MatchScore[] = allKarts.map((k) => ({
           id: k.id,
           name: k.name,
           color: k.bodyColor,
           isPlayer: k.isPlayer,
-          kills: 0,
-          deaths: 0,
-          score: Math.round(1000 / (idx + 1)),
-          damageDealt: 0,
+          kills: k.kills,
+          deaths: k.deaths,
+          score: k.score,
+          damageDealt: k.damageDealt,
           coinsCollected: k.coinsCollected,
-          health: 100,
-          maxHealth: 100,
-          shield: 100,
-          maxShield: 100,
+          health: k.health,
+          maxHealth: k.maxHealth,
+          shield: k.shield,
+          maxShield: k.maxShield,
         }));
         this.options.onScoreUpdate(scores);
       }
     }
 
-    // 11. Check Race Finish (Player completes 3 laps)
-    if (this.player.raceFinished && !this.isMatchOver) {
+    // 12. Check Win Condition for Racing mode (Player finishes 3 laps)
+    if (!isBattleMode && this.player.raceFinished && !this.isMatchOver) {
       this.endMatch();
     }
   }
@@ -341,22 +517,26 @@ export class GameEngine {
     this.soundEngine.stopEngineSound();
 
     const allKarts = [this.player, ...this.bots];
-    allKarts.sort((a, b) => a.racePosition - b.racePosition);
+    if (this.options.gameMode === 'battle') {
+      allKarts.sort((a, b) => b.score - a.score || b.kills - a.kills);
+    } else {
+      allKarts.sort((a, b) => a.racePosition - b.racePosition);
+    }
 
     const scores: MatchScore[] = allKarts.map((k, idx) => ({
       id: k.id,
       name: k.name,
       color: k.bodyColor,
       isPlayer: k.isPlayer,
-      kills: 0,
-      deaths: 0,
-      score: Math.round(1000 / (idx + 1)),
-      damageDealt: 0,
+      kills: k.kills,
+      deaths: k.deaths,
+      score: k.score,
+      damageDealt: k.damageDealt,
       coinsCollected: idx === 0 ? 300 : idx === 1 ? 200 : idx === 2 ? 100 : 50,
-      health: 100,
-      maxHealth: 100,
-      shield: 100,
-      maxShield: 100,
+      health: k.health,
+      maxHealth: k.maxHealth,
+      shield: k.shield,
+      maxShield: k.maxShield,
     }));
 
     if (this.options.onMatchEnd) {
@@ -369,43 +549,51 @@ export class GameEngine {
     const w = this.canvas.width;
     const h = this.canvas.height;
 
-    // Clear Screen
     ctx.fillStyle = this.map.bgColor;
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
-    // Center camera on player
     ctx.translate(w * 0.5, h * 0.5);
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.cameraPos.x, -this.cameraPos.y);
 
-    // 1. Draw Map Background & Grid
+    // 1. Map Grid & Starting Line
     this.renderMapGrid(ctx);
 
-    // 2. Draw Track Road Markings, Turn Arrows & Scenery
+    // 2. Track Markings & Scenery
     this.renderTrackMarkingsAndScenery(ctx);
 
-    // 3. Draw Skid Marks
+    // 3. Skid Marks
     this.particleEngine.renderSkidMarks(ctx);
 
-    // 4. Draw Boost Pads
+    // 4. Boost Pads
     for (const hazard of this.hazards) {
       hazard.render(ctx);
     }
 
-    // 5. Draw Obstacles & Walls
+    // 5. Pickups (Mystery Crates, Nitros, Medkits, Shields)
+    for (const pickup of this.pickups) {
+      pickup.render(ctx);
+    }
+
+    // 6. Obstacles & Buildings
     this.renderObstacles(ctx);
 
-    // 6. Draw Karts
+    // 7. Projectiles (Lasers, Blasters, Mines, Ice Missiles)
+    for (const proj of this.projectiles) {
+      proj.render(ctx);
+    }
+
+    // 8. Karts
     for (const bot of this.bots) {
       bot.render(ctx);
     }
     this.player.render(ctx);
 
-    // 7. Draw Particle FX
+    // 9. Particle FX
     this.particleEngine.render(ctx);
 
-    // 8. Draw Map Outer Boundary Glow
+    // 10. Map Outer Boundary
     ctx.strokeStyle = this.map.borderColor;
     ctx.lineWidth = 6;
     ctx.shadowBlur = 20;
@@ -432,7 +620,7 @@ export class GameEngine {
     }
     ctx.stroke();
 
-    // Draw White Starting Grid Boxes
+    // Draw Starting Line Grid Boxes
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.lineWidth = 3;
     for (const spawn of this.map.playerSpawns) {
@@ -443,7 +631,7 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // Draw Starting Line Checkered Banner
+    // Checkered Start Banner
     const pSpawn = this.map.playerSpawns[0] || { x: 500, y: 500 };
     ctx.save();
     ctx.translate(pSpawn.x - 60, pSpawn.y);
@@ -461,13 +649,11 @@ export class GameEngine {
       ctx.save();
 
       if (this.map.theme === 'volcano') {
-        // Obsidian Magma Peak
         ctx.fillStyle = '#0c0a09';
         ctx.fillRect(obs.x - 6, obs.y - 6, obs.width + 12, obs.height + 12);
         ctx.fillStyle = obs.color || '#450a0a';
         ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
 
-        // Lava Cracks
         ctx.strokeStyle = '#f97316';
         ctx.lineWidth = 2;
         ctx.shadowBlur = 8;
@@ -479,23 +665,19 @@ export class GameEngine {
         ctx.stroke();
         ctx.shadowBlur = 0;
       } else {
-        // Sidewalk Curb Stone Border
         ctx.fillStyle = '#64748b';
         ctx.fillRect(obs.x - 6, obs.y - 6, obs.width + 12, obs.height + 12);
         ctx.fillStyle = '#94a3b8';
         ctx.fillRect(obs.x - 4, obs.y - 4, obs.width + 8, obs.height + 8);
 
-        // Building Base
         ctx.fillStyle = obs.color || '#991b1b';
         ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
 
-        // Shingle Rows
         ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
         for (let ty = obs.y + 8; ty < obs.y + obs.height; ty += 12) {
           ctx.fillRect(obs.x, ty, obs.width, 2);
         }
 
-        // Outline
         ctx.strokeStyle = '#450a0a';
         ctx.lineWidth = 2;
         ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
@@ -523,7 +705,7 @@ export class GameEngine {
       ctx.closePath();
       ctx.stroke();
     }
-    ctx.setLineDash([]); // Reset dashed
+    ctx.setLineDash([]);
 
     // 2. Painted Road Turn Arrows
     for (let i = 0; i < this.map.waypoints.length; i++) {
@@ -554,7 +736,7 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // 3. Volcanic Canyon Lava River & Magma Glow
+    // 3. Volcanic Canyon Lava River
     if (this.map.theme === 'volcano' || this.map.id === 'volcano_canyon') {
       const time = Date.now() * 0.003;
       ctx.strokeStyle = '#f97316';

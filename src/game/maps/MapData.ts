@@ -12,25 +12,34 @@ export const MAPS: Record<string, MapDefinition> = {
     gridColor: 'rgba(255, 255, 255, 0.08)',
     roadColor: '#3a3447',
     borderColor: '#e11d48',
-    description: 'High-speed urban street circuit with asphalt straights, terracotta rooftops, and tight chicanes.',
+    description: 'High-speed urban street circuit and courtyard battle zone with asphalt straights, terracotta rooftops, and tight chicanes.',
     difficulty: 'Easy',
     obstacles: [
-      // Central Plaza Building
+      // Central Plaza Building (Terracotta Roof)
       { x: 1050, y: 750, width: 300, height: 300, color: '#991b1b' },
-      // Downtown Terracotta Buildings
+      // Downtown Buildings
       { x: 350, y: 350, width: 220, height: 180, color: '#b91c1c' },
       { x: 1830, y: 350, width: 220, height: 180, color: '#b91c1c' },
       { x: 350, y: 1270, width: 220, height: 180, color: '#991b1b' },
       { x: 1830, y: 1270, width: 220, height: 180, color: '#991b1b' },
     ],
     hazards: [
-      // Turbo Boost Strips on Straights
       { id: 'bp1', type: 'boost_pad', x: 1100, y: 220, width: 200, height: 50, rotation: 0, boostAngle: 0, boostForce: 750 },
       { id: 'bp2', type: 'boost_pad', x: 1100, y: 1530, width: 200, height: 50, rotation: Math.PI, boostAngle: Math.PI, boostForce: 750 },
       { id: 'bp3', type: 'boost_pad', x: 220, y: 800, width: 50, height: 200, rotation: Math.PI * 0.5, boostAngle: Math.PI * 0.5, boostForce: 750 },
       { id: 'bp4', type: 'boost_pad', x: 2130, y: 800, width: 50, height: 200, rotation: -Math.PI * 0.5, boostAngle: -Math.PI * 0.5, boostForce: 750 },
     ],
-    pickupSpawns: [],
+    pickupSpawns: [
+      { x: 1200, y: 550, type: 'mystery_box' },
+      { x: 1200, y: 1250, type: 'mystery_box' },
+      { x: 650, y: 900, type: 'mystery_box' },
+      { x: 1750, y: 900, type: 'mystery_box' },
+      { x: 450, y: 900, type: 'repair_kit' },
+      { x: 1950, y: 900, type: 'shield_pack' },
+      { x: 1200, y: 900, type: 'monad_coin' },
+      { x: 1200, y: 350, type: 'nitro' },
+      { x: 1200, y: 1450, type: 'nitro' },
+    ],
     playerSpawns: [
       { x: 700, y: 500, rotation: 0 },
       { x: 1700, y: 500, rotation: Math.PI },
@@ -62,21 +71,27 @@ export const MAPS: Record<string, MapDefinition> = {
     gridColor: 'rgba(234, 179, 8, 0.1)',
     roadColor: '#3a2815',
     borderColor: '#eab308',
-    description: 'Arid desert canyon featuring high-speed cliff-side curves, sweeping sand straights, and boost zones.',
+    description: 'Arid desert canyon with high-speed cliff curves, weapon battle caches, and turbo boost zones.',
     difficulty: 'Medium',
     obstacles: [
-      // Canyon Mesa Cliffs
       { x: 800, y: 600, width: 350, height: 180, color: '#452a12' },
       { x: 1450, y: 600, width: 350, height: 180, color: '#452a12' },
       { x: 800, y: 1220, width: 350, height: 180, color: '#452a12' },
       { x: 1450, y: 1220, width: 350, height: 180, color: '#452a12' },
     ],
     hazards: [
-      // Turbo Boost Strips
       { id: 'dbp1', type: 'boost_pad', x: 380, y: 1000, width: 60, height: 220, rotation: -Math.PI * 0.5, boostAngle: -Math.PI * 0.5, boostForce: 780 },
       { id: 'dbp2', type: 'boost_pad', x: 2160, y: 1000, width: 60, height: 220, rotation: Math.PI * 0.5, boostAngle: Math.PI * 0.5, boostForce: 780 },
     ],
-    pickupSpawns: [],
+    pickupSpawns: [
+      { x: 1300, y: 600, type: 'mystery_box' },
+      { x: 1300, y: 1400, type: 'mystery_box' },
+      { x: 500, y: 1000, type: 'mystery_box' },
+      { x: 2100, y: 1000, type: 'mystery_box' },
+      { x: 1300, y: 1000, type: 'monad_coin' },
+      { x: 900, y: 1000, type: 'repair_kit' },
+      { x: 1700, y: 1000, type: 'shield_pack' },
+    ],
     playerSpawns: [
       { x: 500, y: 500, rotation: 0 },
       { x: 2100, y: 500, rotation: Math.PI },
@@ -108,21 +123,27 @@ export const MAPS: Record<string, MapDefinition> = {
     gridColor: 'rgba(148, 163, 184, 0.2)',
     roadColor: '#3a3447',
     borderColor: '#38bdf8',
-    description: 'Sub-zero snow mountain track with asphalt turns, icy water banks, frosted pine trees, and boost straights.',
+    description: 'Sub-zero snow mountain track with asphalt turns, icy water banks, frosted pine trees, and cryogenic combat weapons.',
     difficulty: 'Hard',
     obstacles: [
-      // Snow Island Barriers
       { x: 650, y: 650, width: 160, height: 160, color: '#0284c7' },
       { x: 1390, y: 650, width: 160, height: 160, color: '#0284c7' },
       { x: 650, y: 1390, width: 160, height: 160, color: '#0284c7' },
       { x: 1390, y: 1390, width: 160, height: 160, color: '#0284c7' },
     ],
     hazards: [
-      // Boost Pads
       { id: 'cbp1', type: 'boost_pad', x: 1000, y: 220, width: 200, height: 50, rotation: 0, boostAngle: 0, boostForce: 800 },
       { id: 'cbp2', type: 'boost_pad', x: 1000, y: 1930, width: 200, height: 50, rotation: Math.PI, boostAngle: Math.PI, boostForce: 800 },
     ],
-    pickupSpawns: [],
+    pickupSpawns: [
+      { x: 1100, y: 700, type: 'mystery_box' },
+      { x: 1100, y: 1500, type: 'mystery_box' },
+      { x: 700, y: 1100, type: 'mystery_box' },
+      { x: 1500, y: 1100, type: 'mystery_box' },
+      { x: 1100, y: 1100, type: 'monad_coin' },
+      { x: 1100, y: 400, type: 'nitro' },
+      { x: 1100, y: 1800, type: 'nitro' },
+    ],
     playerSpawns: [
       { x: 500, y: 500, rotation: 0 },
       { x: 1700, y: 500, rotation: Math.PI },
@@ -152,21 +173,25 @@ export const MAPS: Record<string, MapDefinition> = {
     gridColor: 'rgba(34, 197, 94, 0.12)',
     roadColor: '#1d2920',
     borderColor: '#22c55e',
-    description: 'Fast-paced industrial circuit with long straightaways, steel barrier chicanes, and turbo launch zones.',
+    description: 'Fast-paced industrial circuit with long straightaways, steel barrier chicanes, and heavy firepower crates.',
     difficulty: 'Hard',
     obstacles: [
-      // Reactor Silos
       { x: 600, y: 500, width: 280, height: 280, color: '#143020' },
       { x: 1620, y: 500, width: 280, height: 280, color: '#143020' },
       { x: 600, y: 1120, width: 280, height: 280, color: '#143020' },
       { x: 1620, y: 1120, width: 280, height: 280, color: '#143020' },
     ],
     hazards: [
-      // Boost Pads
       { id: 'ibp1', type: 'boost_pad', x: 300, y: 950, width: 60, height: 200, rotation: -Math.PI * 0.5, boostAngle: -Math.PI * 0.5, boostForce: 780 },
       { id: 'ibp2', type: 'boost_pad', x: 2140, y: 950, width: 60, height: 200, rotation: Math.PI * 0.5, boostAngle: Math.PI * 0.5, boostForce: 780 },
     ],
-    pickupSpawns: [],
+    pickupSpawns: [
+      { x: 1250, y: 400, type: 'mystery_box' },
+      { x: 1250, y: 1500, type: 'mystery_box' },
+      { x: 450, y: 950, type: 'repair_kit' },
+      { x: 2050, y: 950, type: 'shield_pack' },
+      { x: 1250, y: 950, type: 'monad_coin' },
+    ],
     playerSpawns: [
       { x: 450, y: 450, rotation: 0 },
       { x: 2050, y: 450, rotation: Math.PI },
@@ -187,8 +212,8 @@ export const MAPS: Record<string, MapDefinition> = {
 
   volcano_canyon: {
     id: 'volcano_canyon',
-    name: 'Volcanic Canyon',
-    subtitle: 'Obsidian Magma Speedway',
+    name: 'Volcanic Canyon Arena',
+    subtitle: 'Obsidian Magma Speedway & Combat Pit',
     theme: 'volcano',
     width: 2600,
     height: 2000,
@@ -196,24 +221,31 @@ export const MAPS: Record<string, MapDefinition> = {
     gridColor: 'rgba(249, 115, 22, 0.12)',
     roadColor: '#2b1c1e',
     borderColor: '#f97316',
-    description: 'Black obsidian rock canyon with glowing molten lava shores, high-speed sweeping turns, and a technical caldera hairpin.',
+    description: 'Black obsidian canyon with glowing molten lava shores, technical hairpin turns, and explosive weapon drops.',
     difficulty: 'Expert',
     obstacles: [
-      // Central Magma Caldera Peak
       { x: 1100, y: 800, width: 400, height: 350, color: '#450a0a' },
-      // Obsidian Rock Formations
       { x: 500, y: 450, width: 260, height: 200, color: '#271b1d' },
       { x: 1850, y: 450, width: 260, height: 200, color: '#271b1d' },
       { x: 500, y: 1350, width: 260, height: 200, color: '#271b1d' },
       { x: 1850, y: 1350, width: 260, height: 200, color: '#271b1d' },
     ],
     hazards: [
-      // Turbo Boost Strips on Lava Straightaways
       { id: 'vbp1', type: 'boost_pad', x: 1300, y: 250, width: 220, height: 50, rotation: 0, boostAngle: 0, boostForce: 820 },
       { id: 'vbp2', type: 'boost_pad', x: 1300, y: 1750, width: 220, height: 50, rotation: Math.PI, boostAngle: Math.PI, boostForce: 820 },
       { id: 'vbp3', type: 'boost_pad', x: 2350, y: 1000, width: 50, height: 220, rotation: -Math.PI * 0.5, boostAngle: -Math.PI * 0.5, boostForce: 820 },
     ],
-    pickupSpawns: [],
+    pickupSpawns: [
+      { x: 1300, y: 550, type: 'mystery_box' },
+      { x: 1300, y: 1450, type: 'mystery_box' },
+      { x: 750, y: 1000, type: 'mystery_box' },
+      { x: 1850, y: 1000, type: 'mystery_box' },
+      { x: 1300, y: 1000, type: 'monad_coin' },
+      { x: 950, y: 600, type: 'nitro' },
+      { x: 1650, y: 1400, type: 'nitro' },
+      { x: 550, y: 1000, type: 'repair_kit' },
+      { x: 2050, y: 1000, type: 'shield_pack' },
+    ],
     playerSpawns: [
       { x: 600, y: 400, rotation: 0 },
       { x: 2000, y: 400, rotation: Math.PI },
@@ -231,6 +263,63 @@ export const MAPS: Record<string, MapDefinition> = {
       { x: 1300, y: 1750, radius: 90 },
       { x: 600, y: 1650, radius: 90 },
       { x: 350, y: 1000, radius: 90 },
+    ],
+  },
+
+  monad_nexus: {
+    id: 'monad_nexus',
+    name: 'Monad Quantum Nexus',
+    subtitle: '10,000 TPS Orbital Battle Platform',
+    theme: 'monad',
+    width: 2800,
+    height: 2200,
+    bgColor: '#090014',
+    gridColor: 'rgba(131, 84, 254, 0.2)',
+    roadColor: '#170033',
+    borderColor: '#a855f7',
+    description: 'Electrified orbital battle station powered by pure Monad Testnet energy beams with void borders and hyper boost rings.',
+    difficulty: 'Extreme',
+    obstacles: [
+      { x: 600, y: 550, width: 250, height: 250, color: '#320066' },
+      { x: 1950, y: 550, width: 250, height: 250, color: '#320066' },
+      { x: 600, y: 1400, width: 250, height: 250, color: '#320066' },
+      { x: 1950, y: 1400, width: 250, height: 250, color: '#320066' },
+      { x: 1250, y: 950, width: 300, height: 300, color: '#4a008f' },
+    ],
+    hazards: [
+      { id: 'mbp1', type: 'boost_pad', x: 1300, y: 350, width: 200, height: 60, rotation: 0, boostAngle: 0, boostForce: 880 },
+      { id: 'mbp2', type: 'boost_pad', x: 1300, y: 1790, width: 200, height: 60, rotation: Math.PI, boostAngle: Math.PI, boostForce: 880 },
+      { id: 'mbp3', type: 'boost_pad', x: 350, y: 1050, width: 60, height: 200, rotation: Math.PI * 0.5, boostAngle: Math.PI * 0.5, boostForce: 880 },
+      { id: 'mbp4', type: 'boost_pad', x: 2390, y: 1050, width: 60, height: 200, rotation: -Math.PI * 0.5, boostAngle: -Math.PI * 0.5, boostForce: 880 },
+    ],
+    pickupSpawns: [
+      { x: 1400, y: 650, type: 'mystery_box' },
+      { x: 1400, y: 1550, type: 'mystery_box' },
+      { x: 750, y: 1100, type: 'mystery_box' },
+      { x: 2050, y: 1100, type: 'mystery_box' },
+      { x: 1400, y: 1100, type: 'monad_coin' },
+      { x: 1000, y: 1100, type: 'shield_pack' },
+      { x: 1800, y: 1100, type: 'repair_kit' },
+      { x: 1400, y: 450, type: 'nitro' },
+      { x: 1400, y: 1750, type: 'nitro' },
+    ],
+    playerSpawns: [
+      { x: 600, y: 400, rotation: 0 },
+      { x: 2200, y: 400, rotation: Math.PI },
+      { x: 600, y: 1800, rotation: 0 },
+      { x: 2200, y: 1800, rotation: Math.PI },
+      { x: 1400, y: 300, rotation: 0 },
+      { x: 1400, y: 1900, rotation: Math.PI },
+    ],
+    waypoints: [
+      { x: 600, y: 300, radius: 90 },
+      { x: 1400, y: 220, radius: 90 },
+      { x: 2200, y: 300, radius: 90 },
+      { x: 2500, y: 1100, radius: 90 },
+      { x: 2200, y: 1900, radius: 90 },
+      { x: 1400, y: 1980, radius: 90 },
+      { x: 600, y: 1900, radius: 90 },
+      { x: 300, y: 1100, radius: 90 },
     ],
   },
 };

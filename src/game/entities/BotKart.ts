@@ -1,6 +1,7 @@
 import { Kart, KartInput } from './Kart';
 import { KartClassId, BotDifficulty } from '../../types/game';
 import { Vector2 } from '../physics/Vector2';
+import { Pickup } from './Pickup';
 
 export class BotKart extends Kart {
   public difficulty: BotDifficulty;
@@ -8,6 +9,8 @@ export class BotKart extends Kart {
   private currentSteer: number = 0;
   private currentThrottle: number = 1;
   private shouldDrift: boolean = false;
+  private shouldFire: boolean = false;
+  public targetPos?: Vector2;
 
   constructor(
     id: string,
@@ -25,7 +28,9 @@ export class BotKart extends Kart {
   public updateAI(
     dt: number,
     allKarts: Kart[],
-    waypoints: { x: number; y: number; radius: number }[]
+    pickups: Pickup[],
+    waypoints: { x: number; y: number; radius: number }[],
+    isBattleMode: boolean = false
   ): KartInput {
     this.decisionTimer += dt;
 
@@ -34,71 +39,123 @@ export class BotKart extends Kart {
 
     if (this.decisionTimer >= reactionInterval) {
       this.decisionTimer = 0;
-      this.makeRacingDecisions(allKarts, waypoints);
+      this.makeCombatAndRacingDecisions(allKarts, pickups, waypoints, isBattleMode);
     }
 
     return {
       throttle: this.currentThrottle,
       steer: this.currentSteer,
       drift: this.shouldDrift,
+      fire: this.shouldFire,
     };
   }
 
-  private makeRacingDecisions(
+  private makeCombatAndRacingDecisions(
     allKarts: Kart[],
-    waypoints: { x: number; y: number; radius: number }[]
+    pickups: Pickup[],
+    waypoints: { x: number; y: number; radius: number }[],
+    isBattleMode: boolean
   ) {
-    if (!waypoints || waypoints.length === 0) return;
+    this.shouldFire = false;
 
-    // 1. Target Next Waypoint on Circuit
-    const targetWp = waypoints[this.currentWaypointIndex % waypoints.length];
-    const distToWp = this.position.distanceTo(new Vector2(targetWp.x, targetWp.y));
-
-    if (distToWp < targetWp.radius + 50) {
-      // Advance to next waypoint
-      const prevIdx = this.currentWaypointIndex;
-      this.currentWaypointIndex = (this.currentWaypointIndex + 1) % waypoints.length;
-      if (this.currentWaypointIndex === 0 && prevIdx === waypoints.length - 1) {
-        this.completeLap();
+    // 1. Check for Emergency Health / Shield foraging if low on HP
+    let targetPos: Vector2 | null = null;
+    if (this.health < this.maxHealth * 0.45) {
+      const repairPickup = pickups.find(
+        (p) => p.isActive && (p.type === 'repair_kit' || p.type === 'shield_pack')
+      );
+      if (repairPickup && this.position.distanceTo(repairPickup.position) < 700) {
+        targetPos = repairPickup.position;
       }
     }
 
-    // 2. Steer towards apex target
-    const toTarget = new Vector2(targetWp.x - this.position.x, targetWp.y - this.position.y);
+    // 2. Search for nearby active mystery boxes if low on ammo
+    if (!targetPos && this.ammo <= 2) {
+      const activeMystery = pickups.filter((p) => p.isActive && p.type === 'mystery_box');
+      let closestBox: Pickup | null = null;
+      let minBoxDist = 500;
+      for (const p of activeMystery) {
+        const dist = this.position.distanceTo(p.position);
+        if (dist < minBoxDist) {
+          minBoxDist = dist;
+          closestBox = p;
+        }
+      }
+      if (closestBox) {
+        targetPos = closestBox.position;
+      }
+    }
+
+    // 3. Find Nearest Enemy Kart to Target and Engage
+    let nearestEnemy: Kart | null = null;
+    let minEnemyDist = 650;
+    for (const other of allKarts) {
+      if (other.id === this.id || other.isDead) continue;
+      const dist = this.position.distanceTo(other.position);
+      if (dist < minEnemyDist) {
+        minEnemyDist = dist;
+        nearestEnemy = other;
+      }
+    }
+
+    // In Battle Mode: prioritize chasing nearest enemies
+    if (isBattleMode && nearestEnemy && !targetPos) {
+      targetPos = nearestEnemy.position;
+    }
+
+    // In Race Mode: follow circuit waypoints
+    if (!targetPos && waypoints && waypoints.length > 0) {
+      const targetWp = waypoints[this.currentWaypointIndex % waypoints.length];
+      const distToWp = this.position.distanceTo(new Vector2(targetWp.x, targetWp.y));
+
+      if (distToWp < targetWp.radius + 50) {
+        const prevIdx = this.currentWaypointIndex;
+        this.currentWaypointIndex = (this.currentWaypointIndex + 1) % waypoints.length;
+        if (this.currentWaypointIndex === 0 && prevIdx === waypoints.length - 1) {
+          this.completeLap();
+        }
+      }
+      targetPos = new Vector2(targetWp.x, targetWp.y);
+    }
+
+    if (!targetPos) return;
+
+    // 4. Steer towards target position
+    const toTarget = targetPos.clone().subtract(this.position);
     const targetAngle = Math.atan2(toTarget.y, toTarget.x);
 
     let angleDiff = targetAngle - this.angle;
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-    // Steering aggressiveness
     const steerSensitivity = this.difficulty === 'overlord' ? 2.5 : this.difficulty === 'ace' ? 2.0 : 1.6;
     this.currentSteer = Math.max(-1, Math.min(1, angleDiff * steerSensitivity));
 
-    // 3. Drift on sharp cornering
+    // 5. Tactical Drifting on sharp turns
     if (Math.abs(angleDiff) > 0.45 && this.speed > 160) {
       this.shouldDrift = true;
     } else {
       this.shouldDrift = false;
     }
 
-    // 4. Throttle Control
+    // 6. Throttle Control
     if (Math.abs(angleDiff) > 1.2) {
-      this.currentThrottle = 0.6; // Feather throttle on sharp hairpin
+      this.currentThrottle = 0.6;
     } else {
-      this.currentThrottle = 1.0; // Full throttle on straights
+      this.currentThrottle = 1.0;
     }
 
-    // 5. Kart-to-Kart Spacing
-    for (const other of allKarts) {
-      if (other.id === this.id) continue;
-      const d = this.position.distanceTo(other.position);
-      if (d < 45) {
-        // Nudge steering slightly to avoid jamming
-        const away = this.position.clone().subtract(other.position);
-        if (away.x * Math.cos(this.angle) + away.y * Math.sin(this.angle) > 0) {
-          this.currentSteer += (away.y > 0 ? 0.3 : -0.3);
-        }
+    // 7. Combat Firing AI: If nearest enemy is in forward crosshair cone (< 35 degrees)
+    if (nearestEnemy && minEnemyDist < 600 && this.ammo > 0) {
+      const toEnemy = nearestEnemy.position.clone().subtract(this.position);
+      const enemyAngle = Math.atan2(toEnemy.y, toEnemy.x);
+      let fireAngleDiff = enemyAngle - this.angle;
+      while (fireAngleDiff > Math.PI) fireAngleDiff -= Math.PI * 2;
+      while (fireAngleDiff < -Math.PI) fireAngleDiff += Math.PI * 2;
+
+      if (Math.abs(fireAngleDiff) < 0.35) {
+        this.shouldFire = true;
+        this.targetPos = nearestEnemy.position.clone();
       }
     }
   }

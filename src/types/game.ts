@@ -129,10 +129,10 @@ export interface KartStatusEffects {
 export interface CombatFeedEvent {
   id: string;
   killerName: string;
-  killerColor: string;
+  killerColor?: string;
   victimName: string;
-  victimColor: string;
-  weapon: WeaponType | 'collision' | 'hazard';
+  victimColor?: string;
+  weapon: WeaponType | 'collision' | 'hazard' | string;
   timestamp: number;
 }
 
@@ -152,7 +152,7 @@ export interface MatchScore {
   maxShield: number;
 }
 
-export type GameMode = 'deathmatch' | 'coin_rush' | 'boss_battle';
+export type GameMode = 'deathmatch' | 'coin_rush' | 'boss_battle' | 'battle' | 'race';
 export type BotDifficulty = 'recruit' | 'veteran' | 'ace' | 'overlord';
 
 export interface GarageCustomization {
