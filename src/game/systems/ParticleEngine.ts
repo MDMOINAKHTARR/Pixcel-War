@@ -212,7 +212,7 @@ export class ParticleEngine {
     });
   }
 
-  public emitExplosion(pos: Vector2, radius: number = 30) {
+  public emitExplosion(pos: Vector2, radius: number = 30, color?: string) {
     // Flash ring
     this.particles.push({
       x: pos.x,
@@ -221,7 +221,7 @@ export class ParticleEngine {
       vy: 0,
       size: 5,
       startSize: 5,
-      color: '#ff6600',
+      color: color || '#ff6600',
       alpha: 1,
       life: 0,
       maxLife: 0.35,

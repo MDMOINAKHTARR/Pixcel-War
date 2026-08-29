@@ -258,6 +258,10 @@ export class SoundEngine {
     }
   }
 
+  public playFreeze() {
+    this.playWeaponFire('cryo');
+  }
+
   public playExplosion() {
     if (!this.ctx || !this.sfxGain || this.isMuted) return;
     const now = this.ctx.currentTime;

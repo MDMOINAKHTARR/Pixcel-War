@@ -33,7 +33,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
   // Drift Sparks Gauge & Tier (0: None, 1: Blue, 2: Orange, 3: Supreme Purple)
   const driftProgress = Math.min(1.0, player.driftTime / 2.2);
-  const driftTier = player.driftTier;
+  const driftTier = player.driftStage;
 
   // Unified Lap Status
   const currentLap = player.currentLap;
@@ -115,7 +115,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       // Draw Mystery Pickups (Yellow dots)
       for (const p of engine.pickups) {
-        if (!p.active) continue;
+        if (!p.isActive) continue;
         ctx.fillStyle = '#facc15';
         ctx.beginPath();
         ctx.arc(pad + p.position.x * scaleX, pad + p.position.y * scaleY, 2.5, 0, Math.PI * 2);
@@ -283,9 +283,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             ) : (
               <Crosshair className="w-6 h-6 text-gray-600" />
             )}
-            {player.weaponAmmo > 0 && (
+            {player.ammo > 0 && (
               <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[8px] font-black px-1.5 py-0.5 rounded-md shadow">
-                x{player.weaponAmmo}
+                x{player.ammo}
               </span>
             )}
           </div>

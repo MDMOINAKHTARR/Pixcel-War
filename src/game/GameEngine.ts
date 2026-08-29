@@ -311,7 +311,7 @@ export class GameEngine {
           drift: this.player.isDrifting,
           lap: this.player.currentLap,
           waypoint: this.player.currentWaypointIndex,
-          finishTime: this.player.finishTime || undefined,
+          finishTime: this.player.raceFinishTime || undefined,
         });
       }
     }
@@ -382,10 +382,11 @@ export class GameEngine {
 
         if (Collision.circleCircle(proj.position, proj.radius, kart.position, kart.radius)) {
           proj.isDead = true;
-          const killed = kart.takeDamage(proj.damage, proj.ownerId);
+          const attacker = allKarts.find((k) => k.id === proj.ownerId);
+          const killed = kart.takeDamage(proj.damage, attacker);
 
           if (proj.type === 'cryo') {
-            kart.applyFreeze(2.5);
+            kart.applyStatus('freeze', 2.5);
             this.soundEngine.playFreeze();
           }
 
@@ -397,7 +398,6 @@ export class GameEngine {
           }
 
           // Combat event logging & score awards
-          const attacker = allKarts.find((k) => k.id === proj.ownerId);
           if (attacker) {
             attacker.damageDealt += proj.damage;
             attacker.score += proj.damage;
@@ -408,10 +408,10 @@ export class GameEngine {
 
               const combatEvent: CombatFeedEvent = {
                 id: `kill_${Date.now()}_${Math.random()}`,
-                attackerId: attacker.id,
-                attackerName: attacker.name,
-                victimId: kart.id,
+                killerName: attacker.name,
+                killerColor: attacker.bodyColor,
                 victimName: kart.name,
+                victimColor: kart.bodyColor,
                 weapon: proj.type,
                 timestamp: Date.now(),
               };
@@ -443,7 +443,7 @@ export class GameEngine {
             const rolledWeapon = getPositionWeightedWeapon(currentPosition, totalRacers);
             kart.giveWeapon(rolledWeapon);
             this.particleEngine.emitSparks(pickup.position, 12);
-          } else if (pickup.type === 'nitro' || pickup.type === 'nitro_tank') {
+          } else if (pickup.type === 'nitro' || (pickup.type as string) === 'nitro_tank') {
             kart.applyBoost(2.2, 1.8);
             this.particleEngine.emitBoostFlames(kart.position, kart.angle);
           } else if (pickup.type === 'repair_kit') {
@@ -760,15 +760,15 @@ export class GameEngine {
       ctx.shadowBlur = 0;
 
       // 2. Base Extrusion Wall (3D Bevel)
-      ctx.fillStyle = this.darkenHex(obs.color, 0.5);
+      ctx.fillStyle = this.darkenHex(obs.color || '#3b82f6', 0.5);
       ctx.fillRect(obs.x - obs.width * 0.5, obs.y - obs.height * 0.5 + 4, obs.width, obs.height);
 
       // 3. Top Face
-      ctx.fillStyle = obs.color;
+      ctx.fillStyle = obs.color || '#3b82f6';
       ctx.fillRect(obs.x - obs.width * 0.5, obs.y - obs.height * 0.5, obs.width, obs.height);
 
       // 4. Highlight Border Edge
-      ctx.strokeStyle = this.lightenHex(obs.color, 0.3);
+      ctx.strokeStyle = this.lightenHex(obs.color || '#3b82f6', 0.3);
       ctx.lineWidth = 2;
       ctx.strokeRect(obs.x - obs.width * 0.5, obs.y - obs.height * 0.5, obs.width, obs.height);
 
@@ -780,7 +780,7 @@ export class GameEngine {
     if (!this.map.waypoints || this.map.waypoints.length === 0) return;
 
     ctx.save();
-    ctx.strokeStyle = this.map.trackColor;
+    ctx.strokeStyle = this.map.borderColor || '#3b82f6';
     ctx.lineWidth = 140;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';

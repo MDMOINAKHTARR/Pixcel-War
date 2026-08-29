@@ -242,4 +242,15 @@ export class Collision {
       penetration: new Vector2(0, 0),
     };
   }
+
+  static pointInBox(point: Vector2, cx: number, cy: number, w: number, h: number): boolean {
+    const halfW = w * 0.5;
+    const halfH = h * 0.5;
+    return (
+      point.x >= cx - halfW &&
+      point.x <= cx + halfW &&
+      point.y >= cy - halfH &&
+      point.y <= cy + halfH
+    );
+  }
 }

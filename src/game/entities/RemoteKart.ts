@@ -1,6 +1,6 @@
 import { Kart, KartInput } from './Kart';
 import { Vector2 } from '../physics/Vector2';
-import { KartClassId, VehicleColors } from '../../types/game';
+import { KartClassId } from '../../types/game';
 
 export class RemoteKart extends Kart {
   public targetPosition: Vector2;
@@ -15,9 +15,9 @@ export class RemoteKart extends Kart {
     kartClass: KartClassId,
     startPos: Vector2,
     startAngle: number,
-    colors?: VehicleColors
+    colors?: { body?: string; accent?: string; underglow?: string; skinId?: any }
   ) {
-    super(id, name, kartClass, startPos, startAngle, colors, false);
+    super(id, name, kartClass, startPos, startAngle, false, colors);
     this.targetPosition = startPos.clone();
     this.targetAngle = startAngle;
     this.targetSpeed = 0;
@@ -62,7 +62,6 @@ export class RemoteKart extends Kart {
     // Update wheels, boost, and particle effects
     const fakeInput: KartInput = {
       throttle: this.speed > 0 ? 1 : 0,
-      brake: 0,
       steer: this.targetSteer,
       drift: this.targetDrift,
       fire: false,

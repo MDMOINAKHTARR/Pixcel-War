@@ -10,6 +10,7 @@ export class Projectile {
   public ownerName: string;
   public type: WeaponType;
   public def: WeaponDef;
+  public damage: number;
 
   public position: Vector2;
   public velocity: Vector2;
@@ -46,6 +47,7 @@ export class Projectile {
     this.ownerName = ownerName;
     this.type = type;
     this.def = WEAPONS[type];
+    this.damage = this.def?.damage || 20;
     this.position = pos.clone();
     this.angle = angle;
     this.targetPos = targetPos;
