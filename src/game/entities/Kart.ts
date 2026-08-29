@@ -481,7 +481,9 @@ export class Kart {
 
     // Draw 3D-Rendered Vehicle Sprite
     ctx.rotate(this.angle + Math.PI * 0.5); // Align sprite forward
-    PixelArtVehicles.drawVehicle(ctx, this.skinId, 1.35, this.bodyColor);
+    const hpRatio = Math.max(0, this.health / this.maxHealth);
+    const isAcc = this.speed > 30 || this.status.isBoosting;
+    PixelArtVehicles.drawVehicle(ctx, this.skinId, 1.35, this.bodyColor, hpRatio, isAcc);
 
     ctx.restore();
 

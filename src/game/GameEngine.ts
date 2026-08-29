@@ -590,6 +590,30 @@ export class GameEngine {
     }
     this.player.render(ctx);
 
+    // 8.5. Pre-Firing Lock-On Targeting Reticle Cue (Proof of Concept 2)
+    if (!this.player.isDead && (this.player.currentWeapon === 'cryo' || this.player.currentWeapon === 'blaster')) {
+      let closestEnemy: Kart | null = null;
+      let minEnemyDist = 650;
+      for (const bot of this.bots) {
+        if (bot.isDead) continue;
+        const dist = this.player.position.distanceTo(bot.position);
+        if (dist < minEnemyDist) {
+          const toBot = bot.position.clone().subtract(this.player.position);
+          const botAngle = Math.atan2(toBot.y, toBot.x);
+          let angleDiff = botAngle - this.player.angle;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          if (Math.abs(angleDiff) < 0.6) {
+            minEnemyDist = dist;
+            closestEnemy = bot;
+          }
+        }
+      }
+      if (closestEnemy) {
+        Projectile.renderLockOnCue(ctx, closestEnemy.position, minEnemyDist < 450);
+      }
+    }
+
     // 9. Particle FX
     this.particleEngine.render(ctx);
 
@@ -787,7 +811,117 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // 3. Volcanic Canyon Lava River
+    // 3.5. PROOF OF CONCEPT 3: Blocky Town Grand Plaza 3D Fountain & Grandstand Crowds
+    if (this.map.id === 'neon_city' || this.map.theme === 'neon') {
+      const time = Date.now() * 0.003;
+
+      // 3D Animated Central Fountain Plaza Island
+      ctx.save();
+      const fX = 1400;
+      const fY = 1000;
+
+      // Fountain Stone Rim (3D Gradient)
+      const stoneGrad = ctx.createRadialGradient(fX, fY, 10, fX, fY, 80);
+      stoneGrad.addColorStop(0, '#64748b');
+      stoneGrad.addColorStop(0.7, '#334155');
+      stoneGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = stoneGrad;
+      ctx.beginPath();
+      ctx.arc(fX, fY, 80, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shimmering Blue Water Basin
+      const waterGrad = ctx.createRadialGradient(fX, fY, 5, fX, fY, 68);
+      waterGrad.addColorStop(0, '#38bdf8');
+      waterGrad.addColorStop(0.6, '#0284c7');
+      waterGrad.addColorStop(1, '#0369a1');
+      ctx.fillStyle = waterGrad;
+      ctx.beginPath();
+      ctx.arc(fX, fY, 68, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Water Ripple Waves
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 2;
+      for (let r = 16; r < 60; r += 16) {
+        const ripple = (r + (time * 25) % 16);
+        ctx.beginPath();
+        ctx.arc(fX, fY, ripple, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Center Spouting Fountain Nozzle
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(fX, fY, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.restore();
+
+      // 3D Grandstand Barrier Cheering Spectator Crowds along Main Straight
+      ctx.save();
+      for (let cx = 700; cx <= 2100; cx += 50) {
+        const bounce = Math.sin(time * 3 + cx * 0.1) * 3;
+        // Crowd Body
+        ctx.fillStyle = (cx % 3 === 0) ? '#ef4444' : (cx % 3 === 1) ? '#3b82f6' : '#eab308';
+        ctx.beginPath();
+        ctx.arc(cx, 160 + bounce, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // Cheering Arms / Waving Flags
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, 158 + bounce);
+        ctx.lineTo(cx + ((cx % 2 === 0) ? 6 : -6), 148 + bounce);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 3D Start/Finish Arch Gantry with Working Traffic Countdown Lights
+      const gX = 1400;
+      const gY = 260;
+      ctx.save();
+      // Gantry Steel Truss
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(gX - 120, gY - 60, 240, 16);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(gX - 120, gY - 60, 240, 16);
+
+      // Traffic Signals (Red, Yellow, Green LED Modules)
+      const sigTime = Math.floor(Date.now() / 600) % 3;
+      // Red Light
+      ctx.fillStyle = sigTime === 0 ? '#ef4444' : '#450a0a';
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = sigTime === 0 ? 12 : 0;
+      ctx.beginPath();
+      ctx.arc(gX - 30, gY - 52, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Yellow Light
+      ctx.fillStyle = sigTime === 1 ? '#eab308' : '#422006';
+      ctx.shadowColor = '#eab308';
+      ctx.shadowBlur = sigTime === 1 ? 12 : 0;
+      ctx.beginPath();
+      ctx.arc(gX, gY - 52, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Green Light
+      ctx.fillStyle = sigTime === 2 ? '#22c55e' : '#052e16';
+      ctx.shadowColor = '#22c55e';
+      ctx.shadowBlur = sigTime === 2 ? 12 : 0;
+      ctx.beginPath();
+      ctx.arc(gX + 30, gY - 52, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.restore();
+    }
+
+    // 4. Volcanic Canyon Lava River
     if (this.map.theme === 'volcano' || this.map.id === 'volcano_canyon') {
       const time = Date.now() * 0.003;
       ctx.strokeStyle = '#f97316';
