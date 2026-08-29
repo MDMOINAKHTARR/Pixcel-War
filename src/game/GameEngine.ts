@@ -9,6 +9,7 @@ import { SoundEngine } from './systems/SoundEngine';
 import { MAPS } from './maps/MapData';
 import { Collision } from './physics/Collision';
 import { Vector2 } from './physics/Vector2';
+import { PixelCityRenderer } from './graphics/PixelCityRenderer';
 import {
   MapDefinition,
   MatchScore,
@@ -557,11 +558,14 @@ export class GameEngine {
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.cameraPos.x, -this.cameraPos.y);
 
-    // 1. Map Grid & Starting Line
-    this.renderMapGrid(ctx);
-
-    // 2. Track Markings & Scenery
-    this.renderTrackMarkingsAndScenery(ctx);
+    // 1 & 2. Ground Terrain, Road Markings, Buildings & District Scenery
+    if (this.map.id === 'neon_city' || this.map.theme === 'neon') {
+      PixelCityRenderer.renderCityTrack(ctx, this.map);
+    } else {
+      this.renderMapGrid(ctx);
+      this.renderTrackMarkingsAndScenery(ctx);
+      this.renderObstacles(ctx);
+    }
 
     // 3. Skid Marks
     this.particleEngine.renderSkidMarks(ctx);
@@ -575,9 +579,6 @@ export class GameEngine {
     for (const pickup of this.pickups) {
       pickup.render(ctx);
     }
-
-    // 6. Obstacles & Buildings
-    this.renderObstacles(ctx);
 
     // 7. Projectiles (Lasers, Blasters, Mines, Ice Missiles)
     for (const proj of this.projectiles) {

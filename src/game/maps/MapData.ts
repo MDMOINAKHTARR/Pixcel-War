@@ -15,14 +15,18 @@ export const MAPS: Record<string, MapDefinition> = {
     description: 'Redesigned urban circuit featuring a long grandstand straight, technical park esses, and a dramatic 180° fountain hairpin.',
     difficulty: 'Easy',
     obstacles: [
-      // Central Plaza Fountain & Park Island
-      { x: 1250, y: 850, width: 300, height: 300, color: '#991b1b' },
-      // North Grandstand Buildings
-      { x: 400, y: 400, width: 220, height: 180, color: '#b91c1c' },
-      { x: 2180, y: 400, width: 220, height: 180, color: '#b91c1c' },
-      // South Metro Buildings
-      { x: 400, y: 1420, width: 220, height: 180, color: '#991b1b' },
-      { x: 2180, y: 1420, width: 220, height: 180, color: '#991b1b' },
+      // Top Row Buildings
+      { x: 220, y: 400, width: 760, height: 200, color: '#94a3b8' },
+      { x: 1180, y: 400, width: 440, height: 200, color: '#991b1b' },
+      { x: 1820, y: 400, width: 760, height: 200, color: '#d97706' },
+      // Middle Row Buildings & Central Park
+      { x: 220, y: 700, width: 760, height: 580, color: '#78350f' },
+      { x: 1180, y: 720, width: 440, height: 560, color: '#65a30d' },
+      { x: 1820, y: 700, width: 760, height: 580, color: '#0f766e' },
+      // Bottom Row Buildings
+      { x: 220, y: 1380, width: 760, height: 220, color: '#94a3b8' },
+      { x: 1180, y: 1380, width: 440, height: 220, color: '#334155' },
+      { x: 1820, y: 1380, width: 760, height: 220, color: '#0f766e' },
     ],
     hazards: [
       { id: 'bp1', type: 'boost_pad', x: 1400, y: 260, width: 220, height: 50, rotation: 0, boostAngle: 0, boostForce: 780 },

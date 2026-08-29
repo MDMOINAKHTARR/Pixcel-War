@@ -251,12 +251,19 @@ const DioramaVolcano = () => (
 
 const DioramaCity = () => (
   <svg viewBox="0 0 160 100" className="w-24 h-16 md:w-32 md:h-20">
-    <ellipse cx="80" cy="75" rx="55" ry="18" fill="#431407" />
-    <ellipse cx="80" cy="70" rx="55" ry="18" fill="#7c2d12" />
-    <path d="M 50 70 Q 80 62 110 70" stroke="#f97316" strokeWidth="4" fill="none" />
-    <rect x="55" y="32" width="18" height="34" fill="#b45309" />
-    <rect x="74" y="16" width="24" height="50" fill="#d97706" />
-    <rect x="100" y="36" width="16" height="30" fill="#9a3412" />
+    <ellipse cx="80" cy="75" rx="55" ry="18" fill="#1e293b" />
+    <ellipse cx="80" cy="70" rx="55" ry="18" fill="#334155" />
+    <path d="M 45 70 Q 80 60 115 70" stroke="#f8fafc" strokeWidth="4" fill="none" />
+    {/* Central Park with Oval Fountain */}
+    <ellipse cx="80" cy="55" rx="20" ry="12" fill="#65a30d" />
+    <ellipse cx="80" cy="55" rx="8" ry="5" fill="#0284c7" />
+    <ellipse cx="80" cy="55" rx="4" ry="2.5" fill="#67e8f9" />
+    {/* Flanking Trees */}
+    <circle cx="68" cy="52" r="5" fill="#22c55e" />
+    <circle cx="92" cy="52" r="5" fill="#22c55e" />
+    {/* Buildings */}
+    <rect x="35" y="32" width="16" height="26" fill="#94a3b8" />
+    <rect x="108" y="26" width="18" height="32" fill="#991b1b" />
   </svg>
 );
 
