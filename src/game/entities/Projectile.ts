@@ -2,6 +2,7 @@ import { Vector2 } from '../physics/Vector2';
 import { WeaponType, WeaponDef } from '../../types/game';
 import { WEAPONS } from '../config/weapons';
 import { ParticleEngine } from '../systems/ParticleEngine';
+import { drawSafeRoundRect } from '../graphics/PixelArtVehicles';
 
 export class Projectile {
   public id: string;
@@ -13,7 +14,7 @@ export class Projectile {
   public position: Vector2;
   public velocity: Vector2;
   public angle: number;
-  public radius: number = 8;
+  public radius: number = 10;
 
   public distanceTraveled: number = 0;
   public maxDistance: number;
@@ -49,12 +50,12 @@ export class Projectile {
     this.targetPos = targetPos;
 
     this.maxDistance = this.def.range || 600;
-    const speed = this.def.projectileSpeed || 600;
+    const speed = this.def.projectileSpeed || 650;
 
     if (type === 'mine') {
       this.isMine = true;
-      this.velocity = Vector2.fromAngle(angle, -60); // Drop softly behind
-      this.radius = 14;
+      this.velocity = Vector2.fromAngle(angle, -60);
+      this.radius = 16;
       this.maxDistance = 99999;
     } else if (type === 'shockwave') {
       this.velocity = new Vector2(0, 0);
@@ -62,11 +63,11 @@ export class Projectile {
       this.radius = 10;
     } else {
       this.velocity = Vector2.fromAngle(angle, speed);
-      if (type === 'laser') this.radius = 12;
-      else if (type === 'vulcan') this.radius = 5;
-      else if (type === 'emp') this.radius = 14;
-      else if (type === 'cryo') this.radius = 10;
-      else this.radius = 8;
+      if (type === 'laser') this.radius = 14;
+      else if (type === 'vulcan') this.radius = 6;
+      else if (type === 'emp') this.radius = 16;
+      else if (type === 'cryo') this.radius = 12;
+      else this.radius = 10;
     }
   }
 
@@ -98,12 +99,12 @@ export class Projectile {
       return;
     }
 
-    // Cryo slight homing
+    // Cryo missile homing
     if (this.type === 'cryo' && this.targetPos) {
       const dirToTarget = this.targetPos.clone().subtract(this.position).normalize();
       const currentDir = this.velocity.clone().normalize();
-      currentDir.lerp(dirToTarget, dt * 2.5).normalize();
-      this.velocity = currentDir.multiplyScalar(this.def.projectileSpeed || 600);
+      currentDir.lerp(dirToTarget, dt * 2.8).normalize();
+      this.velocity = currentDir.multiplyScalar(this.def.projectileSpeed || 650);
       this.angle = this.velocity.angle();
     }
 
@@ -115,7 +116,7 @@ export class Projectile {
       this.isDead = true;
     }
 
-    // Emit trail particles
+    // Trail FX
     if (particleEngine && Math.random() > 0.3) {
       if (this.type === 'emp') {
         particleEngine.emitDriftSparks(this.position, this.angle, 1);
@@ -134,8 +135,18 @@ export class Projectile {
     ctx.translate(this.position.x, this.position.y);
 
     if (this.type === 'mine') {
-      // Landmine body
-      ctx.fillStyle = '#1e1b4b';
+      // 3D Metallic Armed Proximity Landmine
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(0, 4, 18, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Steel Mine Dome
+      const mineGrad = ctx.createRadialGradient(0, -2, 2, 0, 0, 16);
+      mineGrad.addColorStop(0, '#475569');
+      mineGrad.addColorStop(0.5, '#1e293b');
+      mineGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = mineGrad;
       ctx.beginPath();
       ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
       ctx.fill();
@@ -144,71 +155,114 @@ export class Projectile {
       ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // Blinking red beacon
-      const blink = Math.sin(Date.now() * 0.01) > 0;
-      ctx.fillStyle = blink ? '#ef4444' : '#7f1d1d';
+      // Blinking Red LED Trigger Dome
+      const blink = Math.sin(Date.now() * 0.012) > 0;
+      ctx.fillStyle = blink ? '#ff0055' : '#7f1d1d';
+      ctx.shadowColor = '#ff0055';
+      ctx.shadowBlur = blink ? 14 : 2;
       ctx.beginPath();
-      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
       ctx.fill();
-
-      if (this.mineArmed) {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#ef4444';
-      }
+      ctx.shadowBlur = 0;
     } else if (this.type === 'shockwave') {
+      // 3D Expanding Shockwave Ring
       ctx.strokeStyle = '#00f0ff';
-      ctx.lineWidth = 4;
-      ctx.shadowBlur = 15;
+      ctx.lineWidth = 5;
+      ctx.shadowBlur = 20;
       ctx.shadowColor = '#00f0ff';
       ctx.beginPath();
       ctx.arc(0, 0, this.currentRadius, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.shadowBlur = 0;
     } else {
       ctx.rotate(this.angle);
 
       if (this.type === 'laser') {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#a855f7';
+        // 3D Railgun Plasma Beam
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#c084fc';
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-20, -3, 40, 6);
-        ctx.fillStyle = '#a855f7';
-        ctx.fillRect(-24, -5, 48, 10);
-      } else if (this.type === 'vulcan') {
-        ctx.fillStyle = '#fbbf24';
-        ctx.fillRect(-6, -2, 12, 4);
-      } else if (this.type === 'emp') {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#eab308';
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        drawSafeRoundRect(ctx, -24, -4, 48, 8, 3);
         ctx.fill();
-        ctx.strokeStyle = '#eab308';
-        ctx.lineWidth = 3;
+
+        ctx.fillStyle = '#a855f7';
+        drawSafeRoundRect(ctx, -28, -6, 56, 12, 4);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      } else if (this.type === 'vulcan') {
+        // 3D High-Velocity Tracer Round
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#f97316';
+        ctx.shadowBlur = 10;
+        drawSafeRoundRect(ctx, -8, -2.5, 16, 5, 2);
+        ctx.fill();
+        ctx.fillStyle = '#f97316';
+        drawSafeRoundRect(ctx, -12, -3.5, 24, 7, 3);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      } else if (this.type === 'emp') {
+        // 3D EMP Lightning Orb
+        const empGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 14);
+        empGrad.addColorStop(0, '#ffffff');
+        empGrad.addColorStop(0.4, '#fef08a');
+        empGrad.addColorStop(1, '#eab308');
+        ctx.fillStyle = empGrad;
+        ctx.shadowColor = '#eab308';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 15, 0, Math.PI * 2);
         ctx.stroke();
       } else if (this.type === 'cryo') {
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = '#67e8f9';
-        ctx.fillStyle = '#cffafe';
+        // 3D Cryo Ice Missile with Stabilizing Fins
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(-12, -4, 24, 8);
+
+        // Missile Fuselage
+        const missileGrad = ctx.createLinearGradient(-14, 0, 14, 0);
+        missileGrad.addColorStop(0, '#0284c7');
+        missileGrad.addColorStop(0.5, '#bae6fd');
+        missileGrad.addColorStop(1, '#0284c7');
+        ctx.fillStyle = missileGrad;
+        drawSafeRoundRect(ctx, -14, -5, 28, 10, 4);
+        ctx.fill();
+
+        // 4 Ice Fins
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(-12, -9, 5, 4);
+        ctx.fillRect(-12, 5, 5, 4);
+
+        // Glowing Ice Nosecone
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.moveTo(12, 0);
-        ctx.lineTo(-8, -6);
-        ctx.lineTo(-4, 0);
-        ctx.lineTo(-8, 6);
+        ctx.moveTo(14, 0);
+        ctx.lineTo(8, -5);
+        ctx.lineTo(8, 5);
         ctx.closePath();
         ctx.fill();
+        ctx.shadowBlur = 0;
       } else {
-        // Blaster
-        ctx.shadowBlur = 12;
+        // 3D Twin Blaster Plasma Bolt
+        ctx.shadowBlur = 14;
         ctx.shadowColor = '#00f0ff';
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 12, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 14, 6, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#00f0ff';
+
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.75)';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 16, 7, 0, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.ellipse(0, 0, 18, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
     }
 

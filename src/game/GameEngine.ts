@@ -648,15 +648,33 @@ export class GameEngine {
     for (const obs of this.map.obstacles) {
       ctx.save();
 
+      // 1. Cast Ambient Occlusion Drop Shadow for 3D Height
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetX = 10;
+      ctx.shadowOffsetY = 14;
+      ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+
       if (this.map.theme === 'volcano') {
+        // 3D Obsidian Magma Crag
         ctx.fillStyle = '#0c0a09';
         ctx.fillRect(obs.x - 6, obs.y - 6, obs.width + 12, obs.height + 12);
-        ctx.fillStyle = obs.color || '#450a0a';
+
+        const cragGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.width, obs.y + obs.height);
+        cragGrad.addColorStop(0, '#450a0a');
+        cragGrad.addColorStop(0.5, '#1c1917');
+        cragGrad.addColorStop(1, '#0c0a09');
+        ctx.fillStyle = cragGrad;
         ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
 
+        // Glowing Magma Fissure
         ctx.strokeStyle = '#f97316';
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 8;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 10;
         ctx.shadowColor = '#ef4444';
         ctx.beginPath();
         ctx.moveTo(obs.x + 20, obs.y + 20);
@@ -665,20 +683,30 @@ export class GameEngine {
         ctx.stroke();
         ctx.shadowBlur = 0;
       } else {
-        ctx.fillStyle = '#64748b';
+        // 3D Elevated Terracotta Plaza Building (matching Pixel Wheels screenshot 5)
+        const wallGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x, obs.y + obs.height);
+        wallGrad.addColorStop(0, '#94a3b8');
+        wallGrad.addColorStop(1, '#475569');
+        ctx.fillStyle = wallGrad;
         ctx.fillRect(obs.x - 6, obs.y - 6, obs.width + 12, obs.height + 12);
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(obs.x - 4, obs.y - 4, obs.width + 8, obs.height + 8);
 
-        ctx.fillStyle = obs.color || '#991b1b';
+        // Clay Terracotta Roof Surface
+        const roofGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.width, obs.y);
+        roofGrad.addColorStop(0, '#b91c1c');
+        roofGrad.addColorStop(0.3, '#dc2626');
+        roofGrad.addColorStop(0.7, '#b91c1c');
+        roofGrad.addColorStop(1, '#7f1d1d');
+        ctx.fillStyle = obs.color || roofGrad;
         ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        for (let ty = obs.y + 8; ty < obs.y + obs.height; ty += 12) {
-          ctx.fillRect(obs.x, ty, obs.width, 2);
+        // Roof Tile Grooves
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+        for (let ty = obs.y + 10; ty < obs.y + obs.height; ty += 14) {
+          ctx.fillRect(obs.x, ty, obs.width, 2.5);
         }
 
-        ctx.strokeStyle = '#450a0a';
+        // 3D Bevel Edge
+        ctx.strokeStyle = '#fca5a5';
         ctx.lineWidth = 2;
         ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
       }
@@ -690,10 +718,33 @@ export class GameEngine {
   private renderTrackMarkingsAndScenery(ctx: CanvasRenderingContext2D) {
     ctx.save();
 
-    // 1. Center Dashed Road Lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([24, 20]);
+    // 1. 3D Alternating Red-and-White Corner Curbs / Rumble Strips
+    if (this.map.waypoints && this.map.waypoints.length > 2) {
+      const wp = this.map.waypoints;
+      for (let i = 0; i < wp.length; i++) {
+        const p1 = wp[i];
+        const p2 = wp[(i + 1) % wp.length];
+        const segDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const count = Math.floor(segDist / 40);
+        const dx = (p2.x - p1.x) / count;
+        const dy = (p2.y - p1.y) / count;
+        const normX = -dy / Math.hypot(dx, dy);
+        const normY = dx / Math.hypot(dx, dy);
+
+        // Render Outer 3D Curbs
+        for (let j = 0; j < count; j++) {
+          const cx = p1.x + dx * j + normX * 90;
+          const cy = p1.y + dy * j + normY * 90;
+          ctx.fillStyle = j % 2 === 0 ? '#ef4444' : '#f8fafc';
+          ctx.fillRect(cx - 6, cy - 6, 12, 12);
+        }
+      }
+    }
+
+    // 2. Center Dashed Road Lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.lineWidth = 3.5;
+    ctx.setLineDash([26, 22]);
 
     if (this.map.waypoints && this.map.waypoints.length > 2) {
       ctx.beginPath();
@@ -707,7 +758,7 @@ export class GameEngine {
     }
     ctx.setLineDash([]);
 
-    // 2. Painted Road Turn Arrows
+    // 3. Painted 3D Road Turn Arrows
     for (let i = 0; i < this.map.waypoints.length; i++) {
       const p1 = this.map.waypoints[i];
       const p2 = this.map.waypoints[(i + 1) % this.map.waypoints.length];
@@ -718,17 +769,17 @@ export class GameEngine {
       ctx.rotate(angle);
 
       ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.lineWidth = 2;
 
       ctx.beginPath();
-      ctx.moveTo(14, 0);
-      ctx.lineTo(0, -10);
-      ctx.lineTo(0, -4);
-      ctx.lineTo(-14, -4);
-      ctx.lineTo(-14, 4);
-      ctx.lineTo(0, 4);
-      ctx.lineTo(0, 10);
+      ctx.moveTo(16, 0);
+      ctx.lineTo(0, -12);
+      ctx.lineTo(0, -5);
+      ctx.lineTo(-16, -5);
+      ctx.lineTo(-16, 5);
+      ctx.lineTo(0, 5);
+      ctx.lineTo(0, 12);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();

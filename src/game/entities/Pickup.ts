@@ -6,7 +6,7 @@ export class Pickup {
   public id: string;
   public type: PickupType;
   public position: Vector2;
-  public radius: number = 24;
+  public radius: number = 26;
   public isActive: boolean = true;
   public respawnTimer: number = 0;
   public respawnCooldown: number = 6;
@@ -24,7 +24,7 @@ export class Pickup {
 
   public update(dt: number) {
     this.rotation += dt * 1.8;
-    this.hoverOffset = Math.sin(Date.now() * 0.005 + this.position.x) * 4;
+    this.hoverOffset = Math.sin(Date.now() * 0.004 + this.position.x) * 5;
 
     if (!this.isActive) {
       this.respawnTimer += dt;
@@ -46,121 +46,163 @@ export class Pickup {
     ctx.save();
     ctx.translate(this.position.x, this.position.y + this.hoverOffset);
 
-    // 1. Soft Ground Drop Shadow
-    ctx.fillStyle = 'rgba(15, 12, 28, 0.4)';
+    // 1. Soft Dynamic Ground Ambient Occlusion Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
-    ctx.ellipse(0, 16 - this.hoverOffset * 0.5, 16, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 20 - this.hoverOffset * 0.6, 18, 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (this.type === 'mystery_box') {
-      // Realistic Pixel Wooden Crate (matching Pixel Wheels screenshot 1 & 2)
-      ctx.rotate(this.rotation * 0.5);
+      // 3D Isometric Shaded Mystery Crate
+      ctx.rotate(this.rotation * 0.4);
 
-      // Crate Box Shadow / Outer Border
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-17, -17, 34, 34);
+      // Crate Base with 3D Timber Gradient
+      const crateGrad = ctx.createLinearGradient(-18, -18, 18, 18);
+      crateGrad.addColorStop(0, '#f59e0b');
+      crateGrad.addColorStop(0.5, '#d97706');
+      crateGrad.addColorStop(1, '#92400e');
+      ctx.fillStyle = crateGrad;
+      drawSafeRoundRect(ctx, -18, -18, 36, 36, 6);
+      ctx.fill();
 
-      // Crate Main Wooden Planks (Warm Tan Wood)
-      ctx.fillStyle = '#d97706';
-      ctx.fillRect(-14, -14, 28, 28);
+      // Metallic Gold Corner Edge Reinforcements
+      ctx.fillStyle = '#facc15';
+      drawSafeRoundRect(ctx, -18, -18, 8, 8, 2);
+      ctx.fill();
+      drawSafeRoundRect(ctx, 10, -18, 8, 8, 2);
+      ctx.fill();
+      drawSafeRoundRect(ctx, -18, 10, 8, 8, 2);
+      ctx.fill();
+      drawSafeRoundRect(ctx, 10, 10, 8, 8, 2);
+      ctx.fill();
 
-      // Wooden Plank Seams
-      ctx.fillStyle = '#b45309';
-      ctx.fillRect(-14, -5, 28, 2);
-      ctx.fillRect(-14, 5, 28, 2);
+      // Planks Separators
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.fillRect(-18, -6, 36, 2);
+      ctx.fillRect(-18, 6, 36, 2);
 
-      // Diagonal Cross Brace Slats (matching Screenshot 1 & 2)
-      ctx.strokeStyle = '#92400e';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(-12, -12);
-      ctx.lineTo(12, 12);
-      ctx.stroke();
-
-      // Corner Metal Nails
-      ctx.fillStyle = '#451a03';
-      ctx.fillRect(-12, -12, 3, 3);
-      ctx.fillRect(9, -12, 3, 3);
-      ctx.fillRect(-12, 9, 3, 3);
-      ctx.fillRect(9, 9, 3, 3);
-    } else if (this.type === 'monad_coin') {
-      // Glowing Emerald Gem with Ruby Jewel Core (matching Screenshot 1)
-      ctx.rotate(this.rotation);
-
-      // Emerald Gem Body (Octagon)
-      ctx.fillStyle = '#10b981';
+      // 3D Holographic Glowing Question Mark "?"
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#fef08a';
       ctx.shadowBlur = 12;
-      ctx.shadowColor = '#34d399';
-      ctx.beginPath();
-      ctx.moveTo(0, -16);
-      ctx.lineTo(12, -8);
-      ctx.lineTo(16, 4);
-      ctx.lineTo(8, 15);
-      ctx.lineTo(-8, 15);
-      ctx.lineTo(-16, 4);
-      ctx.lineTo(-12, -8);
-      ctx.closePath();
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Facet Highlight Lines
-      ctx.strokeStyle = '#6ee7b7';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Ruby Red Jewel Center Dot
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.arc(0, 0, 5, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (this.type === 'nitro') {
-      // Blue Nitro Canister
-      ctx.rotate(this.rotation * 0.3);
-      ctx.fillStyle = '#0284c7';
-      drawSafeRoundRect(ctx, -8, -14, 16, 28, 4);
-      ctx.fill();
-
-      // Silver Cap
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-5, -17, 10, 4);
-
-      // Glowing Flame Icon
-      ctx.fillStyle = '#38bdf8';
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = '#38bdf8';
-      ctx.font = '12px sans-serif';
+      ctx.font = 'bold 18px "Press Start 2P", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('⚡', 0, 0);
+      ctx.fillText('?', 0, 1);
       ctx.shadowBlur = 0;
-    } else if (this.type === 'repair_kit') {
-      // Red Cross Medical Kit
-      ctx.fillStyle = '#dc2626';
-      drawSafeRoundRect(ctx, -14, -12, 28, 24, 4);
+    } else if (this.type === 'monad_coin') {
+      // 3D Metallic Monad Gold Coin
+      ctx.rotate(this.rotation * 0.6);
+
+      const coinGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 16);
+      coinGrad.addColorStop(0, '#fef08a');
+      coinGrad.addColorStop(0.6, '#eab308');
+      coinGrad.addColorStop(1, '#a16207');
+      ctx.fillStyle = coinGrad;
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Inner Coin Rim
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Monad "M" Center Stamp
+      ctx.fillStyle = '#713f12';
+      ctx.font = 'bold 12px "Press Start 2P", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('M', 0, 1);
+    } else if (this.type === 'nitro') {
+      // 3D Nitro Turbo NOS Bottle
+      ctx.rotate(this.rotation * 0.3);
+
+      const nosGrad = ctx.createLinearGradient(-10, 0, 10, 0);
+      nosGrad.addColorStop(0, '#0369a1');
+      nosGrad.addColorStop(0.3, '#0284c7');
+      nosGrad.addColorStop(0.6, '#38bdf8');
+      nosGrad.addColorStop(1, '#0369a1');
+      ctx.fillStyle = nosGrad;
+      drawSafeRoundRect(ctx, -10, -16, 20, 32, 5);
       ctx.fill();
 
-      // White Cross
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-3, -8, 6, 16);
-      ctx.fillRect(-8, -3, 16, 6);
-    } else if (this.type === 'shield_pack') {
-      // Blue Diamond Energy Shield
-      ctx.fillStyle = '#2563eb';
+      // Chrome Valve Top
+      ctx.fillStyle = '#e2e8f0';
+      drawSafeRoundRect(ctx, -6, -21, 12, 6, 2);
+      ctx.fill();
+
+      // Cyan Flame Turbo Symbol
+      ctx.fillStyle = '#00f0ff';
+      ctx.shadowColor = '#00f0ff';
       ctx.shadowBlur = 10;
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⚡', 0, 1);
+      ctx.shadowBlur = 0;
+    } else if (this.type === 'repair_kit') {
+      // 3D Heavy Medical Hardcase
+      const medGrad = ctx.createLinearGradient(-16, -14, 16, 14);
+      medGrad.addColorStop(0, '#f87171');
+      medGrad.addColorStop(0.4, '#dc2626');
+      medGrad.addColorStop(1, '#991b1b');
+      ctx.fillStyle = medGrad;
+      drawSafeRoundRect(ctx, -16, -14, 32, 28, 5);
+      ctx.fill();
+
+      // Steel Corner Latches
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-14, -14, 4, 3);
+      ctx.fillRect(10, -14, 4, 3);
+      ctx.fillRect(-14, 11, 4, 3);
+      ctx.fillRect(10, 11, 4, 3);
+
+      // Glowing White Medical Cross
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 8;
+      ctx.fillRect(-4, -9, 8, 18);
+      ctx.fillRect(-9, -4, 18, 8);
+      ctx.shadowBlur = 0;
+    } else if (this.type === 'shield_pack') {
+      // 3D Hexagonal Plasma Shield
+      ctx.rotate(this.rotation * 0.5);
+
+      const shieldGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 16);
+      shieldGrad.addColorStop(0, '#93c5fd');
+      shieldGrad.addColorStop(0.5, '#3b82f6');
+      shieldGrad.addColorStop(1, '#1d4ed8');
+      ctx.fillStyle = shieldGrad;
       ctx.shadowColor = '#60a5fa';
+      ctx.shadowBlur = 14;
+
       ctx.beginPath();
-      ctx.moveTo(0, -15);
-      ctx.lineTo(14, -4);
-      ctx.lineTo(9, 14);
-      ctx.lineTo(-9, 14);
-      ctx.lineTo(-14, -4);
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI) / 3;
+        const x = Math.cos(angle) * 16;
+        const y = Math.sin(angle) * 16;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
       ctx.closePath();
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      ctx.fillStyle = '#93c5fd';
+      // Hex Rim
+      ctx.strokeStyle = '#bfdbfe';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Center Core
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(0, 0, 4, 0, Math.PI * 2);
+      ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
       ctx.fill();
     }
 

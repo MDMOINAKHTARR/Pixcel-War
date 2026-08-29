@@ -39,7 +39,7 @@ export class Kart {
   public angle: number = 0; // In radians
   public angularVelocity: number = 0;
   public speed: number = 0;
-  public radius: number = 20;
+  public radius: number = 24;
 
   // Drift Mechanics
   public isDrifting: boolean = false;
@@ -453,18 +453,35 @@ export class Kart {
       ctx.globalAlpha = 0.4;
     }
 
+    // Forward Projector Headlight Beam Cones
+    ctx.save();
+    ctx.rotate(this.angle);
+    const lightGrad = ctx.createRadialGradient(0, 0, 10, 80, 0, 90);
+    lightGrad.addColorStop(0, 'rgba(255, 255, 200, 0.35)');
+    lightGrad.addColorStop(0.5, 'rgba(255, 255, 150, 0.12)');
+    lightGrad.addColorStop(1, 'rgba(255, 255, 100, 0)');
+    ctx.fillStyle = lightGrad;
+    ctx.beginPath();
+    ctx.moveTo(10, -12);
+    ctx.lineTo(120, -45);
+    ctx.lineTo(120, 45);
+    ctx.lineTo(10, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
     // Neon Underglow
     ctx.shadowBlur = 18;
     ctx.shadowColor = this.underglowColor;
     ctx.fillStyle = this.underglowColor;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 24, 14, this.angle, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 28, 16, this.angle, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Draw Pixel Art Vehicle Sprite
+    // Draw 3D-Rendered Vehicle Sprite
     ctx.rotate(this.angle + Math.PI * 0.5); // Align sprite forward
-    PixelArtVehicles.drawVehicle(ctx, this.skinId, 1.1, this.bodyColor);
+    PixelArtVehicles.drawVehicle(ctx, this.skinId, 1.35, this.bodyColor);
 
     ctx.restore();
 
